@@ -1,21 +1,68 @@
 import { Hono } from "hono";
+import { createMiddleware } from "hono/factory";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { db, profiles, resourceArchive, resources } from "@aperture/db";
-import { consumeQuota } from "../middleware/tier.js";
+import { consumeQuota as defaultConsumeQuota } from "../middleware/tier.js";
 import { requireAdmin } from "../middleware/authorization.js";
 import { syncRegistry } from "../services/resource-sync.js";
 
+async function requireResource(id: string) {
+  const rows = await db().select().from(resources).where(eq(resources.id, id));
+  return rows[0] ?? null;
+}
+
+async function findArchivedResource(userId: string, resourceId: string) {
+  const rows = await db()
+    .select()
+    .from(resourceArchive)
+    .where(
+      and(
+        eq(resourceArchive.userId, userId),
+        eq(resourceArchive.resourceId, resourceId),
+      ),
+    );
+  return rows[0] ?? null;
+}
+
+async function persistArchivedResource(
+  userId: string,
+  body: { resourceId: string; notes?: string },
+) {
+  const rows = await db()
+    .insert(resourceArchive)
+    .values({ userId, resourceId: body.resourceId, notes: body.notes })
+    .onConflictDoNothing()
+    .returning();
+  return rows[0] ?? null;
+}
+
 export interface ResourceRouteDependencies {
   syncRegistry?: typeof syncRegistry;
+  loadResource?: typeof requireResource;
+  findArchivedResource?: typeof findArchivedResource;
+  persistArchivedResource?: typeof persistArchivedResource;
+  consumeQuota?: typeof defaultConsumeQuota;
 }
+
+const archiveSaveSchema = z.object({
+  resourceId: z.string(),
+  notes: z.string().optional(),
+});
+type ArchiveSaveBody = z.infer<typeof archiveSaveSchema>;
 
 export function createResourceRoutes(
   dependencies: ResourceRouteDependencies = {},
 ) {
   const resourceRoutes = new Hono();
   const runResourceSync = dependencies.syncRegistry ?? syncRegistry;
+  const loadResource = dependencies.loadResource ?? requireResource;
+  const findArchive =
+    dependencies.findArchivedResource ?? findArchivedResource;
+  const saveArchive =
+    dependencies.persistArchivedResource ?? persistArchivedResource;
+  const consumeQuota = dependencies.consumeQuota ?? defaultConsumeQuota;
 
   // Directory read. Complexity tags were computed at index time (constraint #8),
   // so this is a pure DB lookup with prerequisite gating — no AI on the path.
@@ -85,28 +132,34 @@ export function createResourceRoutes(
     );
   });
 
-  // Free tier: 3 saves (checked in consumeQuota before the insert).
+  const validateArchiveSave = zValidator(
+    "json",
+    archiveSaveSchema,
+  );
+  const requireArchiveSaveInputs = createMiddleware(async (c, next) => {
+    const user = c.get("user");
+    const body = c.req.valid("json" as never) as ArchiveSaveBody;
+    if (!(await loadResource(body.resourceId))) {
+      return c.json({ error: "resource_not_found" }, 404);
+    }
+    if (await findArchive(user.id, body.resourceId)) {
+      return c.json({ error: "already_saved" }, 409);
+    }
+    await next();
+  });
+
+  // Free tier: 3 valid, non-duplicate saves.
   resourceRoutes.post(
     "/archive",
+    validateArchiveSave,
+    requireArchiveSaveInputs,
     consumeQuota("saves"),
-    zValidator(
-      "json",
-      z.object({ resourceId: z.string(), notes: z.string().optional() }),
-    ),
     async (c) => {
       const user = c.get("user");
       const body = c.req.valid("json");
-      const rows = await db()
-        .insert(resourceArchive)
-        .values({
-          userId: user.id,
-          resourceId: body.resourceId,
-          notes: body.notes,
-        })
-        .onConflictDoNothing()
-        .returning();
-      if (!rows[0]) return c.json({ error: "already_saved" }, 409);
-      return c.json(rows[0], 201);
+      const saved = await saveArchive(user.id, body);
+      if (!saved) return c.json({ error: "already_saved" }, 409);
+      return c.json(saved, 201);
     },
   );
 

@@ -48,6 +48,6 @@ The distinction proves that authentication, product tier, and operational admini
 - Tier and organization metadata are loaded from server-side data.
 - Admin status comes from the server-side `AUTH_ADMIN_SUBJECTS` allowlist or an isolated development fixture.
 - Resume uploads default to 8 MiB (`MAX_RESUME_UPLOAD_BYTES`) and oversized input is rejected with `413` before extraction work.
-- Match and resource-archive quotas are reserved for the verified user before the protected action.
+- Match and resource-archive quotas are atomically reserved for the verified user after cheap request and resource preconditions pass, but before the protected operation executes.
 - Shared listing scans and resource synchronization require the verified admin role.
 - The current deployment supports one issuer; issuer-qualified subjects are required before enabling multiple identity providers with potentially overlapping subjects.
