@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "fieldfare-repo",
+      "title": "Fieldfare — drone protocol tooling",
+      "url": "https://github.com/yousufshikder/fieldfare",
+      "kind": "repo",
+      "skills": ["drone protocols", "mavlink", "embedded systems"],
+      "free": true,
+      "submittedBy": "yousufshikder"
+    },
+    {
+      "id": "perimeter-repo",
+      "title": "Perimeter",
+      "url": "https://github.com/yousufshikder/perimeter",
+      "kind": "repo",
+      "skills": ["network security", "systems programming"],
+      "free": true,
+      "submittedBy": "yousufshikder"
+    },
+    {
+      "id": "lapwing-repo",
+      "title": "Lapwing",
+      "url": "https://github.com/yousufshikder/lapwing",
+      "kind": "repo",
+      "skills": ["typescript", "distributed systems"],
+      "free": true,
+      "submittedBy": "yousufshikder"
+    },
+    {
+      "id": "pytorch-official-tutorials",
+      "title": "PyTorch Official Tutorials",
+      "url": "https://pytorch.org/tutorials/",
+      "kind": "documentation",
+      "skills": ["pytorch", "deep learning"],
+      "free": true,
+      "submittedBy": null
+    },
+    {
+      "id": "fastai-practical-dl",
+      "title": "fast.ai — Practical Deep Learning for Coders",
+      "url": "https://course.fast.ai/",
+      "kind": "course",
+      "skills": ["deep learning", "pytorch", "machine learning"],
+      "free": true,
+      "submittedBy": null
+    },
+    {
+      "id": "full-stack-open",
+      "title": "Full Stack Open",
+      "url": "https://fullstackopen.com/en/",
+      "kind": "course",
+      "skills": ["react", "node.js", "typescript", "graphql"],
+      "free": true,
+      "submittedBy": null
+    },
+    {
+      "id": "sql-murder-mystery",
+      "title": "SQL Murder Mystery",
+      "url": "https://mystery.knightlab.com/",
+      "kind": "tutorial",
+      "skills": ["sql"],
+      "free": true,
+      "submittedBy": null
+    },
+    {
+      "id": "designing-data-intensive-apps",
+      "title": "Designing Data-Intensive Applications",
+      "url": "https://dataintensive.net/",
+      "kind": "book",
+      "skills": ["distributed systems", "databases", "system design"],
+      "free": false,
+      "submittedBy": null
+    }
+  ]
+}
