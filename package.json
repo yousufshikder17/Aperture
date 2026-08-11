@@ -1,0 +1,26 @@
+{
+  "name": "aperture",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @aperture/api",
+    "dev:web": "npm run dev -w @aperture/web",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:push": "npm run push -w @aperture/db",
+    "db:studio": "npm run studio -w @aperture/db",
+    "resources:sync": "npm run resources:sync -w @aperture/api",
+    "etl": "npm run etl -w @aperture/api"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "zod": "^4.4.3"
+  }
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+/apps/web/next-env.d.ts
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.duckdb
+*.duckdb.wal
+uploads/
+exports/
