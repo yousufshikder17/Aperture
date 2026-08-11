@@ -1,0 +1,33 @@
+{
+  "name": "@aperture/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "resources:sync": "tsx src/jobs/resource-sync.ts",
+    "etl": "tsx src/jobs/etl.ts"
+  },
+  "dependencies": {
+    "@aperture/ai": "*",
+    "@aperture/analytics": "*",
+    "@aperture/db": "*",
+    "@aperture/shared": "*",
+    "@hono/node-server": "^1.14.0",
+    "@hono/zod-validator": "^0.7.0",
+    "drizzle-orm": "^0.44.0",
+    "fast-xml-parser": "^5.0.0",
+    "hono": "^4.7.0",
+    "jose": "^6.2.8",
+    "pdf-lib": "^1.17.1",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
