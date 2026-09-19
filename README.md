@@ -45,6 +45,32 @@ There is no root `npm run dev` because the API and web app are independent long-
 
 Production must use `AUTH_MODE=oidc` with issuer, audience, JWKS URL, and allowed algorithms configured. See [Authentication](docs/AUTHENTICATION.md).
 
+## Guided resume builder
+
+The `/builder` page supports creating and editing the complete master resume:
+contact details, links, target roles, experience, projects, education, skills and
+supporting evidence, certifications, publications, and awards. Save explicitly to
+create a profile version. Failed saves retain the draft; failed profile loads
+block editing instead of treating an unavailable profile as empty. Unsaved work
+stays in memory, with navigation warnings, not browser storage.
+
+The shared interface includes optional bullet-coaching controls, but hosted coaching
+is not included in this public edition. An unavailable coaching endpoint does not
+block manual editing or saving. References remain a separate API-managed record;
+PDF/DOCX upload review and browser OIDC login are not part of this slice. The API's
+existing in-process recalculation queue and last-write-wins save behavior remain
+unchanged; avoid concurrently editing the same resume in multiple tabs.
+
+Run `npm test` and `npm run typecheck` from the repository root. The opt-in
+`npm run test:browser -w @aperture/web` requires Chrome and `agent-browser` on the
+machine (`AGENT_BROWSER_BIN` can specify its native executable). Stop the web dev
+server first: the test starts its own Next.js instance on port 3109, overridable
+with `BUILDER_TEST_PORT`, and uses a temporary loopback API with synthetic data.
+It checks the real browser UI, not PostgreSQL persistence or a live AI provider.
+Screenshots go to the ignored `apps/web/.next/builder-check` directory. The browser
+client retains the existing local-development credential path; hosted login must
+be configured separately as described in the authentication guide.
+
 ## Public feature boundary
 
 - Resume/profile creation, import, versioning, and PDF export
