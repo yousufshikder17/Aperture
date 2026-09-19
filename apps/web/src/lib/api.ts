@@ -22,9 +22,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new UpgradeRequiredError(await res.json());
   }
   if (!res.ok) {
-    throw new Error(`API ${res.status}: ${await res.text()}`);
+    throw new ApiError(res.status);
   }
   return res.json() as Promise<T>;
+}
+
+export class ApiError extends Error {
+  constructor(public status: number) {
+    super(`API request failed (${status})`);
+  }
 }
 
 export class UpgradeRequiredError extends Error {
