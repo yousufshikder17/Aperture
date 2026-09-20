@@ -8,14 +8,17 @@ function developmentAuthorization(): Record<string, string> {
   return token ? { authorization: `Bearer ${token}` } : {};
 }
 
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}/v1${path}`, {
+export async function api<T>(path: string, init?: RequestInit, base?: string): Promise<T> {
+  const browser = typeof window !== "undefined";
+  const headers = new Headers(browser ? undefined : developmentAuthorization());
+  new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+  if (!(init?.body instanceof FormData) && !headers.has("content-type"))
+    headers.set("content-type", "application/json");
+  const res = await fetch(`${base ?? (browser ? "/api/backend" : BASE + "/v1")}${path}`, {
     ...init,
-    headers: {
-      "content-type": "application/json",
-      ...developmentAuthorization(),
-      ...init?.headers,
-    },
+    headers,
+    credentials: "same-origin",
+    redirect: "error",
     cache: "no-store",
   });
   if (res.status === 402) {

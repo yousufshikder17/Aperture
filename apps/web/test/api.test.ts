@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { api, ApiError, UpgradeRequiredError } from "../src/lib/api.js";
 
+test("multipart requests let fetch supply the boundary and preserve Headers objects", async (t) => {
+  const form = new FormData();
+  form.set("file", new File(["synthetic"], "resume.pdf", { type: "application/pdf" }));
+  t.mock.method(globalThis, "fetch", async (_url: unknown, init: RequestInit) => {
+    assert.equal(new Headers(init.headers).get("content-type"), null);
+    assert.equal(new Headers(init.headers).get("authorization"), "Bearer test");
+    assert.equal(init.body, form);
+    return Response.json({});
+  });
+  await api("/builder/upload", { method: "POST", body: form, headers: new Headers({ authorization: "Bearer test" }) });
+});
+
 test("API wrapper preserves save payload and caller credentials", async (t) => {
   const payload = { basics: { name: "Synthetic Candidate" } };
   let received: RequestInit | undefined;
