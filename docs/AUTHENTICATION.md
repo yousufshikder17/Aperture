@@ -20,7 +20,30 @@ AUTH_ADMIN_SUBJECTS=verified-operator-subject
 
 The verifier checks signature, issuer, audience, time claims, subject, verified email, and the configured algorithm allowlist. The JWKS URL must use HTTPS in production. Missing or invalid configuration fails closed at the authentication boundary.
 
-The production web app must acquire a token from the configured identity provider and send it as the bearer credential. A production build must never configure `NEXT_PUBLIC_AUTH_DEV_TOKEN`.
+The web server supports Authorization Code + PKCE (S256), state and nonce checks,
+and signature/issuer/audience validation of the ID token. Register the exact callback
+`WEB_APP_URL/auth/callback`. Configure `WEB_APP_URL`, `WEB_OIDC_ISSUER`,
+`WEB_OIDC_CLIENT_ID`, optional `WEB_OIDC_CLIENT_SECRET` (client_secret_basic),
+optional `WEB_OIDC_AUDIENCE`, `API_BASE_URL`, and a random 32-byte hexadecimal
+`WEB_SESSION_SECRET` in the Next.js server environment. HTTPS is required in production.
+The provider must issue a JWT access token accepted by the API's issuer, audience,
+and verified-email policy. Opaque access tokens are not supported by the API.
+
+Tokens are stored in encrypted HttpOnly, SameSite=Lax cookies, never browser storage.
+Production cookies use Secure and the __Host- prefix. Sessions expire at the shorter
+of token lifetime and one hour. There is no automatic refresh; sign in again after
+expiry. Oversized tokens fail sign-in rather than creating an unusable cookie.
+Login transactions expire after ten minutes and their cookies are cleared after
+every callback. The provider enforces authorization-code single use.
+
+Signing out clears this browser's app cookies, not the provider's SSO session.
+It does not revoke an already stolen cookie before expiry; rotating the session
+secret invalidates all app sessions. Configuring `WEB_OIDC_CLIENT_ID` disables
+development-token fallback, including after sign-out or a failed/expired session.
+A production build must never configure `NEXT_PUBLIC_AUTH_DEV_TOKEN`.
+
+Protocol references: [OIDC code flow](https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth)
+and [jose JWT/JWE validation](https://github.com/panva/jose).
 
 ## Local development identities
 
