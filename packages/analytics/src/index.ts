@@ -69,7 +69,18 @@ export async function skillGapFrequency(userId: string) {
      ORDER BY listings_requiring DESC`,
     [userId, userId, userId],
   );
-  return reader.getRowObjects();
+  return reader.getRowObjects().map(row => {
+    const requiring = Number(row.listings_requiring);
+    const total = Number(row.listings_total);
+    if (!Number.isSafeInteger(requiring) || !Number.isSafeInteger(total))
+      throw new Error("Listing counts exceed JSON integer precision");
+    return {
+      skill: String(row.skill),
+      role_type: row.role_type === null ? null : String(row.role_type),
+      frequency_pct: row.frequency_pct === null ? null : Number(row.frequency_pct),
+      listings_requiring: requiring, listings_total: total,
+    };
+  });
 }
 
 /** Score improvement over time (Learning + Improvement layer). */

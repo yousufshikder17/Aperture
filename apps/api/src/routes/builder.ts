@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { db, improvementHistory, profiles, resumeVersions } from "@aperture/db";
 import { extractResumeFromDocx, extractResumeFromPdf } from "@aperture/ai";
 import { skillGapFrequency } from "@aperture/analytics";
+import { MarketSuggestionSchema, VersionSummarySchema } from "@aperture/shared";
 
 export const DEFAULT_MAX_RESUME_UPLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_MULTIPART_OVERHEAD_BYTES = 64 * 1024;
@@ -21,6 +22,10 @@ export interface BuilderRouteDependencies {
   extractPdf?: typeof extractResumeFromPdf;
   extractDocx?: typeof extractResumeFromDocx;
   env?: Record<string, string | undefined>;
+  loadProfile?: (userId: string) => Promise<typeof profiles.$inferSelect | null>;
+  loadGaps?: typeof skillGapFrequency;
+  loadVersions?: (userId: string) => Promise<Array<typeof resumeVersions.$inferSelect>>;
+  loadScores?: (userId: string) => Promise<Array<typeof improvementHistory.$inferSelect>>;
 }
 
 export function createBuilderRoutes(dependencies: BuilderRouteDependencies = {}) {
@@ -28,6 +33,13 @@ export function createBuilderRoutes(dependencies: BuilderRouteDependencies = {})
   const extractPdf = dependencies.extractPdf ?? extractResumeFromPdf;
   const extractDocx = dependencies.extractDocx ?? extractResumeFromDocx;
   const uploadLimit = maxResumeUploadBytes(dependencies.env);
+  const findProfile = dependencies.loadProfile ?? (async (userId: string) =>
+    (await db().select().from(profiles).where(eq(profiles.userId, userId)))[0] ?? null);
+  const findGaps = dependencies.loadGaps ?? skillGapFrequency;
+  const findVersions = dependencies.loadVersions ?? (async (userId: string) =>
+    db().select().from(resumeVersions).where(eq(resumeVersions.userId, userId)).orderBy(desc(resumeVersions.version)));
+  const findScores = dependencies.loadScores ?? (async (userId: string) =>
+    db().select().from(improvementHistory).where(eq(improvementHistory.userId, userId)));
   const docxMime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
   builderRoutes.post("/upload", async (c) => {
@@ -50,29 +62,32 @@ export function createBuilderRoutes(dependencies: BuilderRouteDependencies = {})
 
   builderRoutes.get("/market-suggestions", async (c) => {
     const user = c.get("user");
-    const gaps = await skillGapFrequency(user.id);
-    const rows = await db().select().from(profiles).where(eq(profiles.userId, user.id));
-    const targetRoles = new Set((rows[0]?.masterResume?.targetRoles ?? []).map((role) => role.toLowerCase()));
-    return c.json(targetRoles.size === 0 ? gaps : gaps.filter((gap) => targetRoles.has(String(gap.role_type ?? "").toLowerCase())));
+    const gaps = await findGaps(user.id);
+    const profile = await findProfile(user.id);
+    const targetRoles = new Set((profile?.masterResume?.targetRoles ?? []).map((role) => role.trim().toLowerCase()));
+    const relevant = targetRoles.size === 0 ? gaps : gaps.filter((gap) => targetRoles.has(String(gap.role_type ?? "").toLowerCase()));
+    return c.json(MarketSuggestionSchema.array().parse(relevant));
   });
 
   builderRoutes.get("/versions", async (c) => {
     const user = c.get("user");
     const [versions, history] = await Promise.all([
-      db().select().from(resumeVersions).where(eq(resumeVersions.userId, user.id)).orderBy(desc(resumeVersions.version)),
-      db().select().from(improvementHistory).where(eq(improvementHistory.userId, user.id)),
+      findVersions(user.id),
+      findScores(user.id),
     ]);
-    const scoresByVersion = new Map(history.map((entry) => [entry.profileVersion, entry]));
+    const scoresByVersion = new Map([...history]
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((entry) => [entry.profileVersion, entry]));
     return c.json(versions.map((version) => {
       const scores = scoresByVersion.get(version.version);
-      return {
+      return VersionSummarySchema.parse({
         version: version.version,
         note: version.note,
-        createdAt: version.createdAt,
+        createdAt: version.createdAt.toISOString(),
         profileStrength: scores?.profileStrength ?? null,
         avgMatchScore: scores?.avgMatchScore ?? null,
         avgAtsScore: scores?.avgAtsScore ?? null,
-      };
+      });
     }));
   });
 

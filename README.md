@@ -77,6 +77,10 @@ fallback is disabled when an OIDC client is configured.
 
 ## Public feature boundary
 
+Market suggestions and version history validate their response contracts. Listing
+counts are JSON-safe numbers; version scores use the latest recorded snapshot.
+Missing scores remain unavailable rather than being reported as zero.
+
 - Resume/profile creation, import, versioning, and PDF export
 - Job ingestion, listing storage, and application tracking
 - Deterministic matching with published weights: skills 45%, experience 25%, seniority 20%, location 10%
