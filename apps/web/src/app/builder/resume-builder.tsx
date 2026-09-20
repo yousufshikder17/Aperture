@@ -16,6 +16,8 @@ import {
 } from "@aperture/shared";
 import { api, ApiError, UpgradeRequiredError } from "../../lib/api";
 import { emptyResume, resumeFromForm } from "./form-data";
+import ResumeImport from "./resume-import";
+import { useUnsavedChanges } from "./use-unsaved-changes";
 
 type Profile = { masterResume: MasterResume | null; version: number };
 type Version = { version: number; createdAt: string };
@@ -316,12 +318,16 @@ function ResumeForm({
   resume,
   version,
   onSaved,
+  onImport,
+  imported = false,
 }: {
   resume: MasterResume;
   version: number;
-  onSaved: (version: number) => void;
+  onSaved: (version: number, resume: MasterResume) => void;
+  onImport: (resume: MasterResume) => void;
+  imported?: boolean;
 }) {
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(imported);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
@@ -332,37 +338,14 @@ function ResumeForm({
     setSaved("");
   };
 
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    const leave = (event: MouseEvent) => {
-      const link =
-        event.target instanceof Element
-          ? event.target.closest("a[href]")
-          : null;
-      if (
-        link &&
-        !window.confirm("Leave the builder and discard your unsaved changes?")
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
-    window.addEventListener("beforeunload", warn);
-    document.addEventListener("click", leave, true);
-    return () => {
-      window.removeEventListener("beforeunload", warn);
-      document.removeEventListener("click", leave, true);
-    };
-  }, [dirty]);
+  useUnsavedChanges(dirty);
   useEffect(() => {
     if (error) errorBox.current?.focus();
   }, [error]);
 
   return (
+    <>
+    <ResumeImport disabled={saving} onAccept={onImport} />
     <form
       className="builder-form"
       onChange={changed}
@@ -384,7 +367,7 @@ function ResumeForm({
             throw new Error("Invalid save response");
           setDirty(false);
           setSaved(`Saved as version ${result.version}.`);
-          onSaved(result.version);
+          onSaved(result.version, draft);
         } catch (cause) {
           setError(
             message(
@@ -717,10 +700,13 @@ function ResumeForm({
         </section>
       </fieldset>
     </form>
+    </>
   );
 }
 
 export default function ResumeBuilder() {
+  const [draftKey, setDraftKey] = useState(0);
+  const [imported, setImported] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -795,11 +781,20 @@ export default function ResumeBuilder() {
       ) : (
         profile && (
           <ResumeForm
+            key={draftKey}
+            imported={imported}
+            onImport={(masterResume) => {
+              setProfile(current => current ? { ...current, masterResume } : current);
+              setImported(true);
+              setDraftKey(key => key + 1);
+              requestAnimationFrame(() => document.querySelector<HTMLInputElement>('input[name="name"]')?.focus());
+            }}
             resume={profile.masterResume ?? emptyResume()}
             version={profile.version}
-            onSaved={(version) => {
+            onSaved={(version, masterResume) => {
+              setImported(false);
               setProfile((current) =>
-                current ? { ...current, version } : current,
+                current ? { ...current, version, masterResume } : current,
               );
               void loadHistory();
             }}

@@ -18,13 +18,13 @@ export default async function Profile() {
     <>
       <h1>Master profile</h1>
       <p className="muted">
-        The single source of truth. Upload a PDF (extracted via vision, reviewed by you) or
-        edit the JSON directly. Every save recomputes your scores in the background.
+        Your saved master resume. Import a PDF or DOCX, review its extraction, or edit
+        individual fields in the builder. Every save queues score recalculation.
       </p>
+      <a href="/builder">Edit or import your resume</a>
       {!profile?.masterResume ? (
         <div className="card muted">
-          No master resume yet. POST a PDF to /v1/profile/upload, review the extraction, then
-          PUT it to /v1/profile.
+          No master resume yet. Open the builder to create or import one.
         </div>
       ) : (
         <>

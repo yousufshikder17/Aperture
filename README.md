@@ -56,8 +56,11 @@ stays in memory, with navigation warnings, not browser storage.
 
 The shared interface includes optional bullet-coaching controls, but hosted coaching
 is not included in this public edition. An unavailable coaching endpoint does not
-block manual editing or saving. References remain a separate API-managed record;
-PDF/DOCX upload review and browser OIDC login are not part of this slice. The API's
+block manual editing or saving. References remain a separate API-managed record.
+PDF/DOCX imports support extraction review, layout findings, explicit replacement,
+and editing before saving. Extraction uses the configured AI provider; accepting
+an import does not save automatically. Browser OIDC login is available at Account.
+The API's
 existing in-process recalculation queue and last-write-wins save behavior remain
 unchanged; avoid concurrently editing the same resume in multiple tabs.
 
@@ -67,9 +70,9 @@ machine (`AGENT_BROWSER_BIN` can specify its native executable). Stop the web de
 server first: the test starts its own Next.js instance on port 3109, overridable
 with `BUILDER_TEST_PORT`, and uses a temporary loopback API with synthetic data.
 It checks the real browser UI, not PostgreSQL persistence or a live AI provider.
-Screenshots go to the ignored `apps/web/.next/builder-check` directory. The browser
-client retains the existing local-development credential path; hosted login must
-be configured separately as described in the authentication guide.
+Screenshots go to the ignored `apps/web/.next/builder-check` directory. Configure
+browser OIDC login as described in the authentication guide. Development-token
+fallback is disabled when an OIDC client is configured.
 
 ## Public feature boundary
 
