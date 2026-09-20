@@ -3,13 +3,19 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { MasterResumeSchema } from "@aperture/shared";
+import { createHash, randomUUID } from "node:crypto";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { MasterResumeSchema, ReferenceListSchema, type ReferenceList } from "@aperture/shared";
 import { emptyResume } from "../src/app/builder/form-data.js";
 
 async function main() {
+  const { privateKey, publicKey } = await generateKeyPair("RS256");
+  const publicJwk = { ...await exportJWK(publicKey), alg: "RS256", kid: "browser-test", use: "sig" };
+  const codes = new Map<string, { nonce: string; challenge: string }>();
+  let providerOrigin = "";
   const session = `aperture-builder-test-${process.pid}`;
   const browserBinary =
     process.env.AGENT_BROWSER_BIN ??
@@ -25,7 +31,7 @@ async function main() {
     );
   const webPort = Number(process.env.BUILDER_TEST_PORT ?? 3109);
   const webOrigin = `http://127.0.0.1:${webPort}`;
-  let profile = { masterResume: emptyResume(), version: 1 };
+  let profile = { masterResume: emptyResume(), version: 1, referenceList: null as ReferenceList | null };
   profile.masterResume.basics.name = "Synthetic Candidate";
   profile.masterResume.basics.email = "candidate@example.test";
   profile.masterResume.awards = ["Synthetic award"];
@@ -41,12 +47,52 @@ async function main() {
     },
   ];
   let profileStatus = 200,
-    saveStatus = 200,
-    coachStatus = 200;
+    saveStatus = 200;
   let writes = 0,
     coachingCalls = 0,
     historyFails = false;
+  let uploadStatus = 200;
+  let referenceStatus = 200;
+  let marketStatus = 200;
+  const uploadedTypes: string[] = [];
   const apiServer = createServer(async (req, res) => {
+    const requestUrl = new URL(req.url ?? "/", providerOrigin || "http://127.0.0.1");
+    const providerJson = (value: unknown, status = 200) =>
+      res.writeHead(status, { "Content-Type": "application/json" }).end(JSON.stringify(value));
+    if (requestUrl.pathname === "/.well-known/openid-configuration") {
+      providerJson({ issuer: providerOrigin + "/", authorization_endpoint: providerOrigin + "/authorize",
+        token_endpoint: providerOrigin + "/token", jwks_uri: providerOrigin + "/jwks" });
+      return;
+    }
+    if (requestUrl.pathname === "/jwks") { providerJson({ keys: [publicJwk] }); return; }
+    if (requestUrl.pathname === "/authorize") {
+      if (requestUrl.searchParams.get("client_id") !== "synthetic-client" ||
+        requestUrl.searchParams.get("redirect_uri") !== webOrigin + "/auth/callback" ||
+        requestUrl.searchParams.get("code_challenge_method") !== "S256") { providerJson({}, 400); return; }
+      const code = randomUUID();
+      codes.set(code, { nonce: requestUrl.searchParams.get("nonce")!, challenge: requestUrl.searchParams.get("code_challenge")! });
+      const callback = new URL(webOrigin + "/auth/callback");
+      callback.searchParams.set("state", requestUrl.searchParams.get("state")!);
+      callback.searchParams.set("code", code);
+      res.writeHead(303, { location: callback.href }).end();
+      return;
+    }
+    if (requestUrl.pathname === "/token") {
+      let body = "";
+      for await (const chunk of req) body += String(chunk);
+      const params = new URLSearchParams(body);
+      const code = params.get("code")!;
+      const transaction = codes.get(code);
+      codes.delete(code);
+      if (!transaction || createHash("sha256").update(params.get("code_verifier") ?? "").digest("base64url") !== transaction.challenge) {
+        providerJson({ error: "invalid_grant" }, 400); return;
+      }
+      const idToken = await new SignJWT({ nonce: transaction.nonce })
+        .setProtectedHeader({ alg: "RS256", kid: "browser-test" }).setIssuer(providerOrigin + "/")
+        .setAudience("synthetic-client").setSubject("synthetic-user").setIssuedAt().setExpirationTime("10m").sign(privateKey);
+      providerJson({ id_token: idToken, access_token: "synthetic-builder-test", token_type: "Bearer", expires_in: 600 });
+      return;
+    }
     res.setHeader("Access-Control-Allow-Origin", webOrigin);
     res.setHeader("Access-Control-Allow-Headers", "authorization,content-type");
     res.setHeader("Access-Control-Allow-Methods", "GET,PUT,POST,OPTIONS");
@@ -64,13 +110,33 @@ async function main() {
       return;
     }
     try {
+      if (req.url === "/v1/builder/market-suggestions") {
+        send([{ skill: "Rust", role_type: "Engineer", listings_requiring: 3, listings_total: 4, frequency_pct: 75 }], marketStatus);
+        return;
+      }
+      if (req.url === "/v1/builder/upload") {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(Buffer.from(chunk));
+        const form = await new Request(webOrigin, { method: "POST",
+          headers: { "content-type": req.headers["content-type"]! }, body: Buffer.concat(chunks) }).formData();
+        uploadedTypes.push((form.get("file") as File).type);
+        const resume = emptyResume();
+        resume.basics.name = "Imported Candidate";
+        resume.basics.email = "imported@example.test";
+        send({ resume, layoutFindings: [{ issue: "Two columns", atsRisk: "high", fix: "Use one column" }] }, uploadStatus);
+        return;
+      }
+      if (req.url === "/v1/auth/me") {
+        send({ id: "synthetic-user", email: "candidate@example.test" });
+        return;
+      }
       if (req.url === "/v1/profile" && req.method === "GET") {
         send(profile, profileStatus);
         return;
       }
       if (req.url === "/v1/builder/versions") {
         send(
-          [{ version: profile.version, createdAt: "2026-09-18T12:00:00.000Z" }],
+          [{ version: profile.version, createdAt: "2026-09-18T12:00:00.000Z", profileStrength: 73, avgMatchScore: 0, avgAtsScore: null }],
           historyFails ? 503 : 200,
         );
         return;
@@ -84,6 +150,7 @@ async function main() {
           return;
         }
         profile = {
+          ...profile,
           masterResume: MasterResumeSchema.parse(JSON.parse(body)),
           version: profile.version + 1,
         };
@@ -92,18 +159,13 @@ async function main() {
       }
       if (req.url === "/v1/builder/improve-bullet") {
         coachingCalls++;
-        const { bullet } = JSON.parse(body);
-        await delay(400);
-        send(
-          {
-            original: bullet,
-            rewrite: "Built and maintained a parser",
-            issues: [],
-            metricPrompts: ["What inputs did it handle?"],
-            rationale: "Synthetic coaching fixture.",
-          },
-          coachStatus,
-        );
+        send({ error: "not_found" }, 404);
+        return;
+      }
+      if (req.url === "/v1/profile/references" && req.method === "PUT") {
+        if (referenceStatus !== 200) { send({ error: "failed" }, referenceStatus); return; }
+        profile.referenceList = ReferenceListSchema.parse(JSON.parse(body));
+        send(profile);
         return;
       }
       send({ error: "not_found" }, 404);
@@ -176,7 +238,10 @@ async function main() {
   const evaluate = async (source: string) =>
     (await browser("eval", "-b", Buffer.from(source).toString("base64")))
       .result;
-  const waitFor = (source: string) => browser("wait", "--fn", source);
+  const waitFor = async (source: string) => {
+    try { return await browser("wait", "--fn", source); }
+    catch (cause) { throw new Error("Browser condition failed: " + source, { cause }); }
+  };
   const field = (name: string) => `[name="${name}"]`;
   try {
     web = spawn(
@@ -196,6 +261,12 @@ async function main() {
           ...process.env,
           NEXT_PUBLIC_API_BASE_URL: `http://127.0.0.1:${address.port}`,
           NEXT_PUBLIC_AUTH_DEV_TOKEN: "synthetic-builder-test",
+          AUTH_DEV_WEB_TOKEN: "synthetic-builder-test",
+          API_BASE_URL: `http://127.0.0.1:${address.port}`,
+          WEB_APP_URL: webOrigin,
+          WEB_OIDC_ISSUER: `http://127.0.0.1:${address.port}/`,
+          WEB_OIDC_CLIENT_ID: "synthetic-client",
+          WEB_SESSION_SECRET: "ab".repeat(32),
           NEXT_TELEMETRY_DISABLED: "1",
         },
         stdio: ["ignore", "pipe", "pipe"],
@@ -221,18 +292,36 @@ async function main() {
       await delay(500);
     }
     assert(ready, `Next.js did not become ready: ${webLog}`);
-    await browser("open", `${webOrigin}/builder`);
+    providerOrigin = `http://127.0.0.1:${address.port}`;
+    assert.equal((await fetch(webOrigin + "/api/backend/profile", {
+      headers: { cookie: "aperture-session=invalid", authorization: "Bearer synthetic-builder-test" },
+    })).status, 401, "a caller token cannot replace a valid browser session");
+    assert.equal((await fetch(webOrigin + "/api/backend/profile", {
+      method: "PUT", headers: { origin: "https://attacker.test" }, body: "{}",
+    })).status, 403);
+    assert.equal((await fetch(webOrigin + "/auth/logout")).status, 405);
+    assert.equal((await fetch(webOrigin + "/auth/logout", { method: "POST",
+      headers: { origin: "https://attacker.test" } })).status, 403);
+    const logout = await fetch(webOrigin + "/auth/logout", { method: "POST",
+      headers: { origin: webOrigin }, redirect: "manual" });
+    assert.equal(logout.status, 303);
+    assert.ok(logout.headers.get("set-cookie")?.includes("Max-Age=0"));
+    const callback = await fetch(webOrigin + "/auth/callback?state=wrong&code=wrong", { redirect: "manual" });
+    assert.equal(callback.status, 303);
+    assert.ok(callback.headers.get("location")?.endsWith("/account?error=signin"));
+    await browser("open", `${webOrigin}/auth/login`);
     await waitFor(
       'document.querySelector("input[name=name]")?.value === "Synthetic Candidate"',
     );
+    assert.equal(await evaluate('document.cookie.includes("aperture-session")'), false);
     await browser("snapshot", "-i");
     assert.equal(
-      await evaluate('document.querySelector("button[type=submit]").disabled'),
+      await evaluate('document.querySelector(".builder-form button[type=submit]").disabled'),
       true,
     );
 
     await browser("fill", field("email"), "not-an-email");
-    await browser("click", "button[type=submit]");
+    await browser("click", ".builder-form button[type=submit]");
     assert.equal(writes, 0);
     assert.equal(
       await evaluate(
@@ -244,7 +333,7 @@ async function main() {
 
     await browser("fill", field("name"), "Updated Candidate");
     saveStatus = 503;
-    await browser("click", "button[type=submit]");
+    await browser("click", ".builder-form button[type=submit]");
     await waitFor(
       'document.body.textContent.includes("Save could not be confirmed")',
     );
@@ -255,7 +344,7 @@ async function main() {
     assert.equal(profile.version, 1);
     saveStatus = 200;
     historyFails = true;
-    await browser("click", "button[type=submit]");
+    await browser("click", ".builder-form button[type=submit]");
     await waitFor('document.body.textContent.includes("Saved as version 2.")');
     await waitFor(
       'document.body.textContent.includes("Version history could not be loaded")',
@@ -266,77 +355,13 @@ async function main() {
     assert.equal(profile.masterResume.basics.name, "Updated Candidate");
     historyFails = false;
 
-    await browser(
-      "find",
-      "role",
-      "button",
-      "click",
-      "--name",
-      "Review bullet",
-      "--exact",
-    );
-    await waitFor(
-      'document.body.textContent.includes("Apply suggested wording")',
-    );
-    assert.equal(
-      await evaluate(
-        'document.getElementsByName("experience.0.bullets")[0].value',
-      ),
-      "Built a parser",
-    );
-    await browser(
-      "find",
-      "role",
-      "button",
-      "click",
-      "--name",
-      "Apply suggested wording",
-      "--exact",
-    );
-    assert.equal(
-      await evaluate(
-        'document.getElementsByName("experience.0.bullets")[0].value',
-      ),
-      "Built and maintained a parser",
-    );
-    await browser(
-      "find",
-      "role",
-      "button",
-      "click",
-      "--name",
-      "Review bullet",
-      "--exact",
-    );
+    await browser("find", "role", "button", "click", "--name", "Review bullet", "--exact");
+    await waitFor('document.body.textContent.includes("Coaching could not finish")');
+    assert.equal(await evaluate('document.getElementsByName("experience.0.bullets")[0].value'), "Built a parser");
+    assert.equal(await evaluate('document.body.textContent.includes("Apply suggested wording")'), false);
     await browser("fill", field("experience.0.bullets"), "My newer wording");
-    await waitFor('!document.body.textContent.includes("Reviewing bullet")');
-    assert.equal(
-      await evaluate(
-        'document.body.textContent.includes("Apply suggested wording")',
-      ),
-      false,
-    );
-    coachStatus = 402;
-    await browser(
-      "find",
-      "role",
-      "button",
-      "click",
-      "--name",
-      "Review bullet",
-      "--exact",
-    );
-    await waitFor(
-      'document.body.textContent.includes("coaching allowance is used up")',
-    );
-    assert.equal(
-      await evaluate(
-        'document.getElementsByName("experience.0.bullets")[0].value',
-      ),
-      "My newer wording",
-    );
-    assert.equal(coachingCalls, 3);
-    await browser("click", "button[type=submit]");
+    assert.equal(coachingCalls, 1);
+    await browser("click", ".builder-form button[type=submit]");
     await waitFor('document.body.textContent.includes("Saved as version 3.")');
     assert.deepEqual(profile.masterResume.experience[0]?.bullets, [
       "My newer wording",
@@ -368,7 +393,7 @@ async function main() {
       ),
       "Second Example",
     );
-    await browser("click", "button[type=submit]");
+    await browser("click", ".builder-form button[type=submit]");
     await waitFor('document.body.textContent.includes("Saved as version 4.")');
     assert.equal(profile.masterResume.experience.length, 1);
     assert.equal(profile.masterResume.experience[0]?.company, "Second Example");
@@ -431,9 +456,132 @@ async function main() {
       'document.querySelector("input[name=name]")?.value === "Updated Candidate"',
     );
     console.log(
-      "PASS: load, native validation, save failure/retry, preservation, history failure, explicit coaching, stale coaching, quota, add/remove row identity, reload, authentication, mobile overflow, accessibility.",
+      "PASS: load, native validation, save failure/retry, preservation, history failure, unavailable coaching preserves manual editing, add/remove row identity, reload, authentication, mobile overflow, accessibility.",
     );
+    const selectImport = async (name: string) => {
+      // Exercise the native file input, not a script-assigned synthetic FileList.
+      const file = join(captures, name);
+      writeFileSync(file, "synthetic document");
+      await browser("upload", "input[type=file]", file);
+    };
+    await selectImport("resume.exe");
+    await browser("find", "role", "button", "click", "--name", "Extract for review", "--exact");
+    await waitFor('document.body.textContent.includes("Choose a PDF or DOCX file.")');
+    assert.equal(uploadedTypes.length, 0);
+    await selectImport("resume.pdf");
+    uploadStatus = 503;
+    await browser("find", "role", "button", "click", "--name", "Extract for review", "--exact");
+    await waitFor('document.body.textContent.includes("Extraction failed")');
+    assert.equal(await evaluate('document.querySelector("input[name=name]").value'), "Updated Candidate");
+    uploadStatus = 200;
+    const beforeImport = writes;
+    await browser("find", "role", "button", "click", "--name", "Extract for review", "--exact");
+    await waitFor('document.body.textContent.includes("Review extracted draft")');
+    assert.equal(writes, beforeImport);
+    assert.equal(profile.masterResume.basics.name, "Updated Candidate");
+    await browser("find", "role", "button", "click", "--name", "Discard import", "--exact");
+    await selectImport("resume.docx");
+    await browser("find", "role", "button", "click", "--name", "Extract for review", "--exact");
+    await waitFor('document.body.textContent.includes("Review extracted draft")');
+    await evaluate("window.importConfirm = window.confirm; window.confirm = () => false");
+    await browser("find", "role", "button", "click", "--name", "Use extracted draft", "--exact");
+    assert.equal(await evaluate('document.querySelector("input[name=name]").value'), "Updated Candidate");
+    await evaluate("window.confirm = () => true");
+    await browser("find", "role", "button", "click", "--name", "Use extracted draft", "--exact");
+    await evaluate("window.confirm = window.importConfirm");
+    await waitFor('document.querySelector("input[name=name]")?.value === "Imported Candidate"');
+    assert.equal(writes, beforeImport);
+    assert.equal(profile.masterResume.basics.name, "Updated Candidate");
+    assert.equal(await evaluate('document.querySelector(".builder-form button[type=submit]").disabled'), false);
+    await browser("fill", field("name"), "Reviewed Candidate");
+    saveStatus = 503;
+    await browser("click", ".builder-form button[type=submit]");
+    await waitFor('document.body.textContent.includes("Save could not be confirmed")');
+    assert.equal(await evaluate('document.querySelector("input[name=name]").value'), "Reviewed Candidate");
+    saveStatus = 200;
+    await browser("click", ".builder-form button[type=submit]");
+    await waitFor('document.body.textContent.includes("Saved as version 5")');
+    assert.equal(profile.masterResume.basics.name, "Reviewed Candidate");
+    assert.ok(uploadedTypes.includes("application/pdf"));
+    assert.ok(uploadedTypes.includes("application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
+    console.log("PASS: PDF/DOCX import, invalid file, extraction failure, discard, replacement confirmation, review/edit, explicit save and retry.");
+    const resumeBeforeReferences = JSON.stringify(profile.masterResume);
+    assert.equal(await evaluate('document.querySelector("#audit-heading") !== null'), false);
+    assert.ok(await evaluate('document.body.textContent.includes("Match: 0.0 / 100")'));
+    assert.ok(await evaluate('document.body.textContent.includes("ATS: Pending / unavailable")'));
+    marketStatus = 503;
+    await browser("find", "role", "button", "click", "--name", "Load market suggestions", "--exact");
+    await waitFor('document.body.textContent.includes("Market suggestions are unavailable")');
+    marketStatus = 200;
+    await browser("find", "role", "button", "click", "--name", "Load market suggestions", "--exact");
+    await waitFor('document.body.textContent.includes("75.0%")');
+    await browser("find", "role", "button", "click", "--name", "Add reference", "--exact");
+    await browser("fill", field("references.0.name"), "Synthetic Manager");
+    await browser("fill", field("references.0.relationship"), "Direct manager");
+    await browser("fill", field("references.0.contact"), "manager@example.test");
+    referenceStatus = 503;
+    await browser("find", "role", "button", "click", "--name", "Save references", "--exact");
+    await waitFor('document.body.textContent.includes("Reference save could not be confirmed")');
+    assert.equal(profile.referenceList, null);
+    assert.equal(await evaluate('document.getElementsByName("references.0.name")[0].value'), "Synthetic Manager");
+    referenceStatus = 200;
+    await browser("find", "role", "button", "click", "--name", "Save references", "--exact");
+    await waitFor('document.body.textContent.includes("References saved.")');
+    assert.equal(ReferenceListSchema.parse(profile.referenceList).references[0]?.name, "Synthetic Manager");
+    assert.equal(JSON.stringify(profile.masterResume), resumeBeforeReferences);
+    await browser("reload");
+    await waitFor('document.getElementsByName("references.0.name")[0]?.value === "Synthetic Manager"');
+    await browser("fill", field("references.0.title"), "Updated title");
+    await browser("find", "role", "button", "click", "--name", "Save references", "--exact");
+    await waitFor('document.body.textContent.includes("References saved.")');
+    await delay(500);
+    await browser("find", "role", "button", "click", "--name", "Load market suggestions", "--exact");
+    await waitFor('document.body.textContent.includes("75.0%")');
+    await browser("set", "viewport", "1440", "1000");
+    await evaluate("window.scrollTo(0, 0)");
+    await browser("screenshot", join(captures, "desktop.png"), "--full");
+    await browser("set", "viewport", "390", "844");
+    await evaluate("window.scrollTo(0, 0)");
+    await browser("screenshot", join(captures, "mobile.png"), "--full");
+    assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
+    console.log("PASS: saved-version display, market retry and zero/pending scores.");
+    console.log("PASS: independent reference save, failure/retry, persistence and resume preservation.");
+    await browser("open", webOrigin + "/account");
+    await waitFor('document.body.textContent.includes("Signed in as candidate@example.test")');
+    await evaluate("window.scrollTo(0, 0)");
+    await browser("screenshot", join(captures, "account-mobile.png"), "--full");
+    await browser("set", "viewport", "1440", "1000");
+    await browser("screenshot", join(captures, "account-desktop.png"), "--full");
+    await browser("find", "role", "link", "click", "--name", "Builder", "--exact");
+    await waitFor('document.querySelector("input[name=name]")?.value === "Reviewed Candidate"');
+    await browser("fill", field("name"), "Unsaved history test");
+    await browser("fill", field("references.0.title"), "Another reference title");
+    await browser("find", "role", "button", "click", "--name", "Save references", "--exact");
+    await waitFor('document.body.textContent.includes("References saved.")');
+    assert.equal(await evaluate('window.dispatchEvent(new Event("beforeunload", { cancelable: true }))'), false,
+      "saving one dirty form must not remove another form's leave warning");
+    await evaluate('sessionStorage.removeItem("test-beforeunload"); window.addEventListener("beforeunload", event => sessionStorage.setItem("test-beforeunload", event.defaultPrevented ? "yes" : "no"))');
+    // Schedule navigation so the daemon can handle the native dialog separately.
+    await evaluate('setTimeout(() => history.back(), 200); true');
+    await delay(400);
+    await browser("dialog", "dismiss");
+    assert.equal(await evaluate('location.pathname'), "/builder");
+    assert.equal(await evaluate('document.querySelector("input[name=name]").value'), "Unsaved history test");
+    await evaluate('setTimeout(() => history.back(), 200); true');
+    await delay(400);
+    await browser("dialog", "accept");
+    await waitFor('location.pathname === "/account"');
+    assert.equal(await evaluate('sessionStorage.getItem("test-beforeunload")'), "yes");
+    console.log("PASS: independent dirty-form guards, browser Back cancel preserves draft, and confirmed Back leaves.");
+    await browser("find", "role", "button", "click", "--name", "Sign out of Aperture", "--exact");
+    await waitFor('document.body.textContent.includes("You are not signed in to Aperture.")');
+    assert.equal(await evaluate('(async () => (await fetch("/api/backend/profile")).status)()'), 401);
+    console.log("PASS: real OIDC browser redirects, PKCE callback, HttpOnly cookie and logout without development fallback.");
+    console.log("PASS: server-rendered account identity, forged credentials, CSRF, callback failure, logout.");
     console.log(`Screenshots: ${captures}`);
+  } catch (error) {
+    console.error(webLog);
+    throw error;
   } finally {
     await browser("close").catch(() => {});
     for (const child of browserProcesses) child.kill();

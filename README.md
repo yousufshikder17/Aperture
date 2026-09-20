@@ -75,11 +75,19 @@ Screenshots go to the ignored `apps/web/.next/builder-check` directory. Configur
 browser OIDC login as described in the authentication guide. Development-token
 fallback is disabled when an OIDC client is configured.
 
+The browser regression uses a local OIDC provider fixture for login, session-backed
+requests, account identity, and logout. It also covers imports, independent reference
+saves, market errors/retry, score display, and cancelling navigation with unsaved edits.
+Hosted coaching is treated as unavailable, matching this edition's actual API.
+
 ## Public feature boundary
 
 Market suggestions and version history validate their response contracts. Listing
 counts are JSON-safe numbers; version scores use the latest recorded snapshot.
 Missing scores remain unavailable rather than being reported as zero.
+The builder displays these market suggestions and score snapshots, including
+pending values and genuine zero scores. Hosted master-resume audits, reference
+assessments, and their UI controls are intentionally excluded.
 
 - Resume/profile creation, import, versioning, and PDF export
 - Job ingestion, listing storage, and application tracking

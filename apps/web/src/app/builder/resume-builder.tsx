@@ -12,6 +12,8 @@ import {
   BulletSuggestionSchema,
   type MasterResume,
   type BulletSuggestion,
+  VersionSummarySchema,
+  type VersionSummary,
 } from "@aperture/shared";
 import { api, ApiError, UpgradeRequiredError } from "../../lib/api";
 import { emptyResume, resumeFromForm } from "./form-data";
@@ -19,9 +21,10 @@ import ResumeImport from "./resume-import";
 import { useUnsavedChanges } from "./use-unsaved-changes";
 import { Field, Collection } from "./builder-fields";
 import ReferencesEditor from "./references-editor";
+import BuilderInsights, { formatScore } from "./builder-insights";
 
 type Profile = { masterResume: MasterResume | null; version: number };
-type Version = { version: number; createdAt: string };
+type Version = VersionSummary;
 
 function message(error: unknown, fallback: string) {
   if (error instanceof UpgradeRequiredError)
@@ -599,10 +602,7 @@ export default function ResumeBuilder() {
     setHistoryLoading(true);
     setHistoryError("");
     try {
-      const rows = await api<Version[]>("/builder/versions", { signal });
-      if (!Array.isArray(rows) || rows.some(row => !row || !Number.isInteger(row.version) || row.version < 1 || typeof row.createdAt !== "string" || !Number.isFinite(Date.parse(row.createdAt)))) {
-        throw new Error("Invalid version history");
-      }
+      const rows = VersionSummarySchema.array().parse(await api("/builder/versions", { signal }));
       if (!signal?.aborted) setVersions(rows);
     } catch {
       if (!signal?.aborted)
@@ -648,8 +648,8 @@ export default function ResumeBuilder() {
     <div className="resume-builder">
       <h1>Resume builder</h1>
       <p className="muted">
-        Build your master resume once. Matching, recruiter intelligence, and
-        tailoring use this profile. Bullet coaching is optional.
+        Build your master resume once for matching and skill-gap analysis.
+        Hosted bullet coaching is not included in this edition.
       </p>
       {loading ? (
         <p role="status">Loading your resume…</p>
@@ -683,9 +683,13 @@ export default function ResumeBuilder() {
           />
         )
       )}
-      {!loading && !error && profile && <ReferencesEditor />}
+      {!loading && !error && profile && <>
+        <ReferencesEditor />
+        <BuilderInsights key={profile.version} />
+      </>}
       <section className="builder-section" aria-labelledby="history-heading">
         <h2 id="history-heading">Saved versions</h2>
+        <p className="muted">Scores arrive after background recalculation. ATS averages use existing reports and may not reflect a fresh analysis of that version.</p>
         {historyLoading ? (
           <p role="status">Loading version history…</p>
         ) : historyError ? (
@@ -705,6 +709,8 @@ export default function ResumeBuilder() {
                 <time dateTime={row.createdAt}>
                   {new Date(row.createdAt).toLocaleString()}
                 </time>
+                <div>Profile strength: {formatScore(row.profileStrength)} · Match: {formatScore(row.avgMatchScore)} · ATS: {formatScore(row.avgAtsScore)}</div>
+                {row.note && <p>{row.note}</p>}
               </li>
             ))}
           </ol>
