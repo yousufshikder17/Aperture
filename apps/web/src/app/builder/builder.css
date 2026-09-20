@@ -8,6 +8,15 @@ body:has(.resume-builder) > nav {
 .resume-builder p {
   max-width: 72ch;
 }
+.resume-builder a {
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+.builder-suggestion h3,
+.builder-suggestion h4 {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
 .builder-section {
   padding: 1.25rem 0;
   border-bottom: 1px solid #2a323c;
@@ -51,7 +60,8 @@ body:has(.resume-builder) > nav {
 .resume-builder textarea {
   resize: vertical;
 }
-.resume-builder button {
+.resume-builder button,
+.resume-builder .builder-link-button {
   min-height: 44px;
   padding: 0.55rem 0.9rem;
   border: 1px solid #596675;
@@ -60,6 +70,10 @@ body:has(.resume-builder) > nav {
   color: var(--text);
   font: inherit;
   cursor: pointer;
+}
+.builder-link-button {
+  display: inline-flex;
+  align-items: center;
 }
 .resume-builder button:hover:not(:disabled) {
   border-color: var(--accent);

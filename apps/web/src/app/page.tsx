@@ -1,4 +1,4 @@
-import { api } from "@/lib/api";
+import { api } from "@/lib/server-api";
 
 interface DigestItem {
   listing: { id: string; title: string; company: string; url: string };

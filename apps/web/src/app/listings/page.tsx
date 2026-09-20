@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api } from "@/lib/server-api";
 import type { Listing, MatchScore } from "@aperture/shared";
 
 export default async function Listings() {

@@ -1,4 +1,4 @@
-import { api } from "@/lib/api";
+import { api } from "@/lib/server-api";
 import type { MasterResume } from "@aperture/shared";
 
 interface ProfileRow {

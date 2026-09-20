@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,12 +11,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <nav>
-          <Link href="/">Aperture</Link>
-          <Link href="/builder">Builder</Link>
-          <Link href="/listings">Listings</Link>
-          <Link href="/applications">Applications</Link>
-          <Link href="/resources">Resources</Link>
-          <Link href="/profile">Profile</Link>
+          {/* Document navigation preserves native unsaved-draft warnings on Back/Forward. */}
+          <a href="/">Aperture</a>
+          <a href="/builder">Builder</a>
+          <a href="/listings">Listings</a>
+          <a href="/applications">Applications</a>
+          <a href="/resources">Resources</a>
+          <a href="/profile">Profile</a>
+          <a href="/account">Account</a>
         </nav>
         <main>{children}</main>
       </body>
