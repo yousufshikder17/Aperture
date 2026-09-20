@@ -56,7 +56,8 @@ stays in memory, with navigation warnings, not browser storage.
 
 The shared interface includes optional bullet-coaching controls, but hosted coaching
 is not included in this public edition. An unavailable coaching endpoint does not
-block manual editing or saving. References remain a separate API-managed record.
+block manual editing or saving. References have their own editor and save action;
+reference failures preserve the draft and do not alter the saved resume.
 PDF/DOCX imports support extraction review, layout findings, explicit replacement,
 and editing before saving. Extraction uses the configured AI provider; accepting
 an import does not save automatically. Browser OIDC login is available at Account.
