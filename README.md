@@ -45,6 +45,28 @@ There is no root `npm run dev` because the API and web app are independent long-
 
 Production must use `AUTH_MODE=oidc` with issuer, audience, JWKS URL, and allowed algorithms configured. See [Authentication](docs/AUTHENTICATION.md).
 
+## Public listing workflow
+
+At `/listings`, refresh the latest 100 catalog entries or scan the operator-configured
+LinkedIn/Indeed RSS feeds. Scanning remains **administrator-only** because it updates
+the shared catalog. Missing configuration, partial feed failures and duplicate entries
+are distinguished; scanning does not automatically score matches.
+
+Open a listing to read its description and calculate a transparent match against your
+saved master resume. Scoring is deterministic/local, respects the account allowance,
+and saves the result with its resume version. Reload the detail page or listing index
+to see saved results. Failed requests preserve displayed results and provide sign-in,
+profile, quota and administrator recovery guidance. Listing actions never save or
+replace your master resume.
+
+This is a selective public port: no hosted recruiter intelligence, resume tailoring,
+tailored-artifact storage/retrieval, or tailored-PDF controls/routes were added. The
+existing lightweight `/ats` API remains unchanged. Public contract and regression tests
+check the absent private routes, and browser tests assert that the interface never
+calls them. The browser suite covers scanning states, match failures/retry/reload,
+mobile layout and accessibility against synthetic services—not live feed/provider or
+PostgreSQL acceptance. Browser captures are saved under ignored `exports/browser-check`.
+
 ## Guided resume builder
 
 The `/builder` page supports creating and editing the complete master resume:
@@ -71,7 +93,7 @@ machine (`AGENT_BROWSER_BIN` can specify its native executable). Stop the web de
 server first: the test starts its own Next.js instance on port 3109, overridable
 with `BUILDER_TEST_PORT`, and uses a temporary loopback API with synthetic data.
 It checks the real browser UI, not PostgreSQL persistence or a live AI provider.
-Screenshots go to the ignored `apps/web/.next/builder-check` directory. Configure
+Screenshots go to the ignored `exports/browser-check` directory. Configure
 browser OIDC login as described in the authentication guide. Development-token
 fallback is disabled when an OIDC client is configured.
 

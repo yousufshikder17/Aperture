@@ -1,0 +1,20 @@
+.listing-workflow { color-scheme: dark; overflow-wrap: anywhere; }
+body:has(.listing-workflow) > nav { flex-wrap: wrap; }
+.listing-workflow p { max-width: 72ch; margin: 0.6rem 0; }
+.listing-workflow a { color: var(--accent); text-underline-offset: 0.2em; }
+.listing-workflow > h1 { margin-top: 1rem; }
+.listing-workflow h3 { font-size: 1rem; margin: 1rem 0 0.4rem; }
+.listing-section { border-top: 1px solid #2a323c; padding: 1.25rem 0; margin-top: 1.25rem; }
+.listing-section > h2:first-child { margin-top: 0; }
+.listing-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.25rem 0; }
+.listing-workflow button { min-height: 44px; padding: 0.55rem 0.9rem; border: 1px solid #596675; border-radius: 4px; background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
+.listing-workflow button:hover:not(:disabled) { border-color: var(--accent); }
+.listing-workflow button:disabled { opacity: 0.6; cursor: not-allowed; }
+.listing-workflow .listing-primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: bold; }
+.listing-workflow :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.listing-workflow ::selection { background: var(--accent); color: var(--bg); }
+.listing-error { color: #f3a5a5; }
+.listing-description { white-space: pre-wrap; }
+.listing-workflow summary { cursor: pointer; padding: 0.6rem 0; min-height: 44px; }
+.listing-workflow pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 1rem; background: var(--panel); font-size: 0.85rem; }
+.listing-workflow strong { font-variant-numeric: tabular-nums; }

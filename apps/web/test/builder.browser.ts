@@ -55,6 +55,14 @@ async function main() {
   let referenceStatus = 200;
   let marketStatus = 200;
   const uploadedTypes: string[] = [];
+  const listingId = "00000000-0000-4000-8000-000000000002";
+  const listing = { id: listingId, source: "manual", url: "javascript:alert(1)", title: "Synthetic Backend Engineer",
+    company: "Example Company", description: "Build reliable APIs. <script>bad()</script>", location: "Remote", salary: null, postedAt: null };
+  const listingMatch = { overall: 0, subscores: { skills: 0, experience: 0, seniority: 0, location: 0 },
+    strengths: [], concerns: ["Missing SQL"], verdict: "stretch", rationale: "Synthetic match" };
+  let listingStatus = 200, matchStatus = 200, scanStatus = 403;
+  let scanConfigured = false, hasMatch = false, matchCalls = 0;
+  const listingRequests: string[] = [];
   const apiServer = createServer(async (req, res) => {
     const requestUrl = new URL(req.url ?? "/", providerOrigin || "http://127.0.0.1");
     const providerJson = (value: unknown, status = 200) =>
@@ -110,6 +118,20 @@ async function main() {
       return;
     }
     try {
+      if (requestUrl.pathname.startsWith("/v1/listings")) {
+        listingRequests.push(requestUrl.pathname);
+        const route = requestUrl.pathname.slice("/v1/listings".length);
+        const row = { listing, match: hasMatch ? listingMatch : null, profileVersion: hasMatch ? profile.version : null };
+        if (route === "" || route === "/") { send([row], listingStatus); return; }
+        if (route === "/scan") { send({ configured: scanConfigured ? 1 : 0, succeeded: scanConfigured ? 1 : 0,
+          scanned: scanConfigured ? 1 : 0, inserted: 0, failedSources: [] }, scanStatus); return; }
+        if (route === "/" + listingId) { send(row, listingStatus); return; }
+        if (route === "/" + listingId + "/match") {
+          matchCalls++; await delay(400); if (matchStatus === 200) hasMatch = true;
+          send({ score: listingMatch, profileVersion: profile.version }, matchStatus); return;
+        }
+        send({ error: "not_found" }, 404); return;
+      }
       if (req.url === "/v1/builder/market-suggestions") {
         send([{ skill: "Rust", role_type: "Engineer", listings_requiring: 3, listings_total: 4, frequency_pct: 75 }], marketStatus);
         return;
@@ -398,7 +420,8 @@ async function main() {
     assert.equal(profile.masterResume.experience.length, 1);
     assert.equal(profile.masterResume.experience[0]?.company, "Second Example");
 
-    const captures = resolve(".next/builder-check");
+    // Keep browser outputs outside Next's cleanable build directory (Windows locks).
+    const captures = resolve("../../exports/browser-check");
     mkdirSync(captures, { recursive: true });
     await browser("set", "viewport", "1440", "1000");
     await evaluate("window.scrollTo(0, 0); true");
@@ -573,6 +596,65 @@ async function main() {
     await waitFor('location.pathname === "/account"');
     assert.equal(await evaluate('sessionStorage.getItem("test-beforeunload")'), "yes");
     console.log("PASS: independent dirty-form guards, browser Back cancel preserves draft, and confirmed Back leaves.");
+    const listingWritesBefore = writes;
+    await browser("open", webOrigin + "/listings");
+    await waitFor('document.body.textContent.includes("Synthetic Backend Engineer")');
+    await browser("find", "role", "button", "click", "--name", "Scan configured feeds (admin)", "--exact");
+    await waitFor('document.querySelector("[role=alert]")?.textContent.includes("requires an administrator")');
+    scanStatus = 200;
+    await browser("find", "role", "button", "click", "--name", "Scan configured feeds (admin)", "--exact");
+    await waitFor('document.body.textContent.includes("No feeds are configured")');
+    scanConfigured = true;
+    await browser("find", "role", "button", "click", "--name", "Scan configured feeds (admin)", "--exact");
+    await waitFor('document.body.textContent.includes("0 new listings added from 1")');
+    listingStatus = 503;
+    await browser("find", "role", "button", "click", "--name", "Refresh listings", "--exact");
+    await waitFor('document.querySelector("[role=alert]") !== null');
+    assert.equal(await evaluate('document.body.textContent.includes("Synthetic Backend Engineer")'), true);
+    listingStatus = 200;
+    await browser("find", "role", "button", "click", "--name", "Refresh listings", "--exact");
+    await waitFor('document.querySelector("[role=alert]") === null');
+    await browser("find", "role", "link", "click", "--name", "Synthetic Backend Engineer", "--exact");
+    await waitFor('document.body.textContent.includes("No saved match yet")');
+    assert.equal(await evaluate('document.querySelector("a[href^=javascript]")'), null);
+    for (const [failure, message] of [[402, "allowance is exhausted"], [409, "Save a master resume"], [401, "Sign in through Account"]] as const) {
+      matchStatus = failure;
+      await browser("find", "role", "button", "click", "--name", "Score match", "--exact");
+      await waitFor(`document.body.textContent.includes(${JSON.stringify(message)})`);
+    }
+    matchStatus = 200;
+    const previousCalls = matchCalls;
+    await browser("find", "role", "button", "click", "--name", "Score match", "--exact");
+    await evaluate('document.querySelector(".listing-primary").click()');
+    await waitFor('document.body.textContent.includes("Transparent match: 0.0 / 100")');
+    assert.equal(matchCalls, previousCalls + 1);
+    matchStatus = 503;
+    await browser("find", "role", "button", "click", "--name", "Score match", "--exact");
+    await waitFor('document.querySelector("[role=alert]") !== null');
+    assert.equal(await evaluate('document.body.textContent.includes("Transparent match: 0.0 / 100")'), true);
+    await browser("reload");
+    await waitFor('document.body.textContent.includes("Transparent match: 0.0 / 100")');
+    assert.equal(writes, listingWritesBefore);
+    assert.equal(listingRequests.some(path => /\/intel|\/tailor/.test(path)), false, "public UI must never call private endpoints");
+    assert.equal(await evaluate('document.body.textContent.includes("Generate tailored resume")'), false);
+    await browser("set", "viewport", "1440", "1000");
+    await evaluate("window.scrollTo(0, 0)");
+    await browser("screenshot", join(captures, "listing-desktop.png"), "--full");
+    await browser("set", "viewport", "390", "844");
+    assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
+    await browser("screenshot", join(captures, "listing-mobile.png"), "--full");
+    const detailA11y = await browser("a11y");
+    assert.equal(detailA11y.violations.length, 0, JSON.stringify(detailA11y.violations));
+    await browser("open", webOrigin + "/listings");
+    await waitFor('document.body.textContent.includes("Match: 0.0 / 100")');
+    await browser("screenshot", join(captures, "listings-mobile.png"), "--full");
+    await browser("set", "viewport", "1440", "1000");
+    await browser("screenshot", join(captures, "listings-desktop.png"), "--full");
+    const listA11y = await browser("a11y");
+    assert.equal(listA11y.violations.length, 0, JSON.stringify(listA11y.violations));
+    console.log("PASS: public listing scan/admin/configuration states, match quota/profile/session recovery, double-click protection, saved match reload, no private calls, mobile and accessibility.");
+    await browser("open", webOrigin + "/account");
+    await waitFor('document.body.textContent.includes("Signed in as candidate@example.test")');
     await browser("find", "role", "button", "click", "--name", "Sign out of Aperture", "--exact");
     await waitFor('document.body.textContent.includes("You are not signed in to Aperture.")');
     assert.equal(await evaluate('(async () => (await fetch("/api/backend/profile")).status)()'), 401);
