@@ -3,7 +3,7 @@ import { createMiddleware } from "hono/factory";
 import { and, desc, eq } from "drizzle-orm";
 import { db, listings, matches, profiles } from "@aperture/db";
 import { scoreListing as defaultScoreListing, simulateAts } from "@aperture/ai";
-import type { Listing } from "@aperture/shared";
+import type { Listing, ListingRows } from "@aperture/shared";
 import { consumeQuota as defaultConsumeQuota } from "../middleware/tier.js";
 import { requireAdmin } from "../middleware/authorization.js";
 import { scanFeeds } from "../services/aggregator.js";
@@ -51,6 +51,15 @@ async function persistMatch(
 }
 
 type MatchProfile = NonNullable<Awaited<ReturnType<typeof requireProfile>>>;
+// Shared catalog, owner-scoped match results. Detail reads are not limited to the latest 100.
+async function loadRows(userId: string, id?: string): Promise<ListingRows> {
+  const rows = await db().select().from(listings)
+    .leftJoin(matches, and(eq(matches.listingId, listings.id), eq(matches.userId, userId)))
+    .where(id ? eq(listings.id, id) : undefined)
+    .orderBy(desc(listings.createdAt)).limit(id ? 1 : 100);
+  return rows.map(row => ({ listing: toListing(row.listings), match: row.matches?.score ?? null,
+    profileVersion: row.matches?.profileVersion ?? null }));
+}
 type MatchListing = NonNullable<Awaited<ReturnType<typeof requireListing>>>;
 
 declare module "hono" {
@@ -61,6 +70,8 @@ declare module "hono" {
 }
 
 export interface ListingRouteDependencies {
+  loadRows?: typeof loadRows;
+  scanFeeds?: typeof scanFeeds;
   loadProfile?: typeof requireProfile;
   loadListing?: typeof requireListing;
   scoreListing?: typeof defaultScoreListing;
@@ -80,26 +91,20 @@ export function createListingRoutes(
 
   listingRoutes.get("/", async (c) => {
     const user = c.get("user");
-    const rows = await db()
-      .select()
-      .from(listings)
-      .leftJoin(
-        matches,
-        and(eq(matches.listingId, listings.id), eq(matches.userId, user.id)),
-      )
-      .orderBy(desc(listings.createdAt))
-      .limit(100);
-    return c.json(
-      rows.map((row) => ({
-        listing: toListing(row.listings),
-        match: row.matches?.score ?? null,
-      })),
-    );
+    return c.json(await (dependencies.loadRows ?? loadRows)(user.id));
+  });
+
+  listingRoutes.get("/:id", async c => {
+    const id = c.req.param("id");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
+      return c.json({ error: "listing_not_found" }, 404);
+    const rows = await (dependencies.loadRows ?? loadRows)(c.get("user").id, id);
+    return rows[0] ? c.json(rows[0]) : c.json({ error: "listing_not_found" }, 404);
   });
 
   // Feed ingestion mutates the shared listing catalog, so only verified admins may run it.
   listingRoutes.post("/scan", requireAdmin(), async (c) =>
-    c.json(await scanFeeds()),
+    c.json(await (dependencies.scanFeeds ?? scanFeeds)()),
   );
 
   const requireMatchInputs = createMiddleware(async (c, next) => {
