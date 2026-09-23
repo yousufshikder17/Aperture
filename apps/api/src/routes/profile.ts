@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { eq, sql } from "drizzle-orm";
 import { db, profiles, resumeVersions } from "@aperture/db";
-import { MasterResumeSchema, ReferenceListSchema } from "@aperture/shared";
+import { DEFAULT_TEMPLATE, MasterResumeSchema, ReferenceListSchema } from "@aperture/shared";
 import { enqueueRecalc } from "../jobs/recalc.js";
 import { renderResumePdf } from "../lib/pdf-export.js";
 
@@ -60,7 +60,7 @@ profileRoutes.get("/pdf", async (c) => {
   const resume = rows[0]?.masterResume;
   if (!resume) return c.json({ error: "no_master_resume" }, 404);
 
-  const pdf = await renderResumePdf(resume);
+  const pdf = await renderResumePdf(resume, rows[0]?.template ?? DEFAULT_TEMPLATE);
   return c.body(pdf, 200, {
     "Content-Type": "application/pdf",
     "Content-Disposition": `attachment; filename="resume-master.pdf"`,

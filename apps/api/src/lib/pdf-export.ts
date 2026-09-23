@@ -1,110 +1,119 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import type { MasterResume } from "@aperture/shared";
+import { PDFDocument, StandardFonts, rgb, type PDFPage, type PDFFont } from "pdf-lib";
+import { DEFAULT_TEMPLATE, type MasterResume, type ResumeSection, type ResumeTemplate } from "@aperture/shared";
 
-// Minimal single-column, parser-friendly PDF renderer for saved profiles.
-// The layout deliberately avoids columns, tables, and graphics.
-
-const MARGIN = 50;
 const WIDTH = 612; // US Letter
 const HEIGHT = 792;
 
-export async function renderResumePdf(resume: MasterResume): Promise<Uint8Array<ArrayBuffer>> {
+function color(hex: string) {
+  return rgb(...([1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255) as [number, number, number]));
+}
+
+// Standard PDF fonts use WinAnsi. Replace common punctuation and omit unsupported glyphs.
+function pdfText(value: string) {
+  return value.replace(/[–—]/g, "-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    .replace(/\u2022/g, "-").replace(/[^\x20-\x7e\xa0-\xff]/g, "");
+}
+
+export async function renderResumePdf(
+  resume: MasterResume,
+  template: ResumeTemplate = DEFAULT_TEMPLATE,
+): Promise<Uint8Array<ArrayBuffer>> {
   const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-
-  let page = doc.addPage([WIDTH, HEIGHT]);
-  let y = HEIGHT - MARGIN;
-
-  const ensureRoom = (needed: number) => {
-    if (y - needed < MARGIN) {
-      page = doc.addPage([WIDTH, HEIGHT]);
-      y = HEIGHT - MARGIN;
-    }
+  const family = template.type.fontFamily;
+  const regular = await doc.embedFont(family === "TimesRoman" ? StandardFonts.TimesRoman
+    : family === "Courier" ? StandardFonts.Courier : StandardFonts.Helvetica);
+  const bold = await doc.embedFont(family === "TimesRoman" ? StandardFonts.TimesRomanBold
+    : family === "Courier" ? StandardFonts.CourierBold : StandardFonts.HelveticaBold);
+  const margin = template.spacing.margin;
+  const bodySize = template.type.bodySize;
+  const textColor = color(template.color.text);
+  const accentColor = color(template.color.accent);
+  const primaryColor = color(template.color.primary);
+  const pages: PDFPage[] = [doc.addPage([WIDTH, HEIGHT])];
+  const pageAt = (index: number) => {
+    while (pages.length <= index) pages.push(doc.addPage([WIDTH, HEIGHT]));
+    return pages[index]!;
   };
 
-  const wrap = (text: string, size: number, f = font): string[] => {
-    const words = text.split(/\s+/);
-    const max = WIDTH - MARGIN * 2;
+  type Cursor = { page: number; x: number; width: number; y: number };
+  const wrap = (value: string, size: number, font: PDFFont, width: number) => {
     const lines: string[] = [];
     let line = "";
-    for (const word of words) {
-      const attempt = line ? `${line} ${word}` : word;
-      if (f.widthOfTextAtSize(attempt, size) > max && line) {
+    for (let word of pdfText(value).split(/\s+/)) {
+      if (!word) continue;
+      while (font.widthOfTextAtSize(word, size) > width) {
+        if (line) { lines.push(line); line = ""; }
+        let cut = 1;
+        while (cut < word.length && font.widthOfTextAtSize(word.slice(0, cut + 1), size) <= width) cut++;
+        lines.push(word.slice(0, cut));
+        word = word.slice(cut);
+      }
+      if (!word) continue;
+      const next = line ? `${line} ${word}` : word;
+      if (font.widthOfTextAtSize(next, size) > width && line) {
         lines.push(line);
         line = word;
-      } else {
-        line = attempt;
-      }
+      } else line = next;
     }
     if (line) lines.push(line);
     return lines;
   };
-
-  const write = (text: string, size: number, f = font, gap = 4) => {
-    for (const line of wrap(text, size, f)) {
-      ensureRoom(size + gap);
-      page.drawText(line, { x: MARGIN, y, size, font: f, color: rgb(0.1, 0.1, 0.1) });
-      y -= size + gap;
+  const write = (cursor: Cursor, value: string, size = bodySize, font = regular, ink = textColor, gap = 3) => {
+    for (const line of wrap(value, size, font, cursor.width)) {
+      if (cursor.y - size - gap < margin) {
+        cursor.page++;
+        cursor.y = HEIGHT - margin;
+      }
+      pageAt(cursor.page).drawText(line, { x: cursor.x, y: cursor.y, size, font, color: ink });
+      cursor.y -= size + gap;
     }
   };
+  const full: Cursor = { page: 0, x: margin, width: WIDTH - margin * 2, y: HEIGHT - margin };
+  write(full, resume.basics.name, template.type.nameSize, bold, primaryColor, 6);
+  write(full, [resume.basics.email, resume.basics.phone, resume.basics.location]
+    .filter(Boolean).join(" | "), bodySize - 1);
+  for (const link of resume.basics.links) write(full, `${link.label}: ${link.url}`, bodySize - 1);
+  full.y -= template.spacing.sectionGap;
 
-  const heading = (text: string) => {
-    y -= 8;
-    write(text.toUpperCase(), 11, bold, 6);
-  };
+  const twoColumns = template.layout.columns === 2;
+  const gutter = 20;
+  const sidebarWidth = twoColumns ? Math.floor((full.width - gutter) * 0.34) : 0;
+  const main: Cursor = { page: full.page, x: margin, width: full.width - (twoColumns ? sidebarWidth + gutter : 0), y: full.y };
+  const sidebar: Cursor = { page: full.page, x: margin + main.width + gutter, width: sidebarWidth, y: full.y };
+  const bullet = template.spacing.bulletStyle === "dash" ? "-" : "•";
 
-  write(resume.basics.name, 18, bold, 8);
-  const contact = [resume.basics.email, resume.basics.phone, resume.basics.location]
-    .filter(Boolean)
-    .join(" · ");
-  write(contact, 9);
-  for (const link of resume.basics.links) write(`${link.label}: ${link.url}`, 9);
-
-  if (resume.summary) {
-    heading("Summary");
-    write(resume.summary, 10);
-  }
-
-  if (resume.experience.length) {
-    heading("Experience");
-    for (const exp of resume.experience) {
-      write(`${exp.title} — ${exp.company}`, 10.5, bold);
-      write(`${exp.start} – ${exp.end ?? "Present"}${exp.location ? ` · ${exp.location}` : ""}`, 9);
-      for (const bullet of exp.bullets) write(`• ${bullet}`, 10);
-      y -= 4;
+  function section(cursor: Cursor, name: ResumeSection) {
+    const hasContent = name === "summary" ? !!resume.summary : resume[name].length > 0;
+    if (!hasContent) return;
+    cursor.y -= template.spacing.sectionGap;
+    write(cursor, name.toUpperCase(), template.type.headingSize, bold, accentColor, 5);
+    if (name === "summary") write(cursor, resume.summary ?? "", bodySize);
+    if (name === "experience") for (const item of resume.experience) {
+      write(cursor, `${item.title} - ${item.company}`, bodySize + 0.5, bold);
+      write(cursor, `${item.start} - ${item.end ?? "Present"}${item.location ? ` | ${item.location}` : ""}`, bodySize - 1);
+      for (const line of item.bullets) write(cursor, `${bullet} ${line}`);
+      cursor.y -= 4;
+    }
+    if (name === "projects") for (const item of resume.projects) {
+      write(cursor, item.url ? `${item.name} (${item.url})` : item.name, bodySize + 0.5, bold);
+      if (item.description) write(cursor, item.description);
+      for (const line of item.bullets) write(cursor, `${bullet} ${line}`);
+      cursor.y -= 4;
+    }
+    if (name === "skills") {
+      const groups = new Map<string, string[]>();
+      for (const item of resume.skills) groups.set(item.category, [...(groups.get(item.category) ?? []), item.name]);
+      for (const [category, names] of groups) write(cursor, `${category}: ${names.join(", ")}`);
+    }
+    if (name === "education") for (const item of resume.education) {
+      write(cursor, `${item.credential}${item.field ? `, ${item.field}` : ""} - ${item.institution}`, bodySize + 0.5, bold);
+      if (item.end) write(cursor, item.end, bodySize - 1);
+      cursor.y -= 4;
     }
   }
 
-  if (resume.projects.length) {
-    heading("Projects");
-    for (const proj of resume.projects) {
-      write(proj.url ? `${proj.name} (${proj.url})` : proj.name, 10.5, bold);
-      for (const bullet of proj.bullets) write(`• ${bullet}`, 10);
-      y -= 4;
-    }
+  for (const name of template.layout.sectionOrder) {
+    section(twoColumns && template.layout.sidebar.includes(name) ? sidebar : main, name);
   }
-
-  if (resume.skills.length) {
-    heading("Skills");
-    const byCategory = new Map<string, string[]>();
-    for (const s of resume.skills) {
-      byCategory.set(s.category, [...(byCategory.get(s.category) ?? []), s.name]);
-    }
-    for (const [category, names] of byCategory) {
-      write(`${category}: ${names.join(", ")}`, 10);
-    }
-  }
-
-  if (resume.education.length) {
-    heading("Education");
-    for (const edu of resume.education) {
-      write(`${edu.credential}${edu.field ? `, ${edu.field}` : ""} — ${edu.institution}`, 10.5, bold);
-      if (edu.end) write(edu.end, 9);
-    }
-  }
-
-  // Copy into a plain ArrayBuffer-backed view — pdf-lib types its output as
-  // ArrayBufferLike, which Hono's response body rejects.
   return new Uint8Array(await doc.save());
 }
