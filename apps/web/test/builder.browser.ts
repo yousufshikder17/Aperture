@@ -55,6 +55,8 @@ async function main() {
   let referenceStatus = 200;
   let marketStatus = 200;
   const uploadedTypes: string[] = [];
+  let masterPdfStatus = 200;
+  let masterPdfCalls = 0;
   const listingId = "00000000-0000-4000-8000-000000000002";
   const listing = { id: listingId, source: "manual", url: "javascript:alert(1)", title: "Synthetic Backend Engineer",
     company: "Example Company", description: "Build reliable APIs. <script>bad()</script>", location: "Remote", salary: null, postedAt: null };
@@ -156,9 +158,15 @@ async function main() {
         send(profile, profileStatus);
         return;
       }
+      if (req.url === "/v1/profile/pdf") {
+        masterPdfCalls++;
+        if (masterPdfStatus !== 200) { send({ error: "download_failed" }, masterPdfStatus); return; }
+        res.writeHead(200, { "content-type": "application/pdf", "content-disposition": "attachment; filename=resume-master.pdf" }).end("%PDF-synthetic");
+        return;
+      }
       if (req.url === "/v1/builder/versions") {
         send(
-          [{ version: profile.version, createdAt: "2026-09-18T12:00:00.000Z", profileStrength: 73, avgMatchScore: 0, avgAtsScore: null }],
+          profile.version ? [{ version: profile.version, createdAt: "2026-09-18T12:00:00.000Z", profileStrength: 73, avgMatchScore: 0, avgAtsScore: null }] : [],
           historyFails ? 503 : 200,
         );
         return;
@@ -301,10 +309,11 @@ async function main() {
       webLog += String(chunk);
     });
     let ready = false;
-    for (let i = 0; i < 120; i++) {
+    const startupDeadline = Date.now() + 60_000;
+    while (Date.now() < startupDeadline) {
       if (web.exitCode !== null) throw new Error(`Next.js exited: ${webLog}`);
       try {
-        if ((await fetch(`${webOrigin}/builder`)).ok) {
+        if ((await fetch(`${webOrigin}/builder`, { signal: AbortSignal.timeout(5000) })).ok) {
           ready = true;
           break;
         }
@@ -651,6 +660,66 @@ async function main() {
     const listA11y = await browser("a11y");
     assert.equal(listA11y.violations.length, 0, JSON.stringify(listA11y.violations));
     console.log("PASS: public listing scan/admin/configuration states, match quota/profile/session recovery, double-click protection, saved match reload, no private calls, mobile and accessibility.");
+    profile = { masterResume: emptyResume(), version: 0, referenceList: null };
+    await browser("open", webOrigin + "/builder");
+    await waitFor('document.body.textContent.includes("Your first master resume")');
+    const beforeCreate = writes;
+    await browser("find", "role", "button", "click", "--name", "Review current draft", "--exact");
+    assert.equal(await evaluate('document.querySelector(".builder-review") === null'), true);
+    assert.equal(await evaluate('document.activeElement.name'), "name");
+    await browser("fill", field("name"), "New Candidate");
+    await browser("fill", field("email"), "new@example.test");
+    await browser("fill", field("summary"), "I build reliable tools.");
+    await browser("fill", field("targetRoles"), "Developer");
+    await browser("find", "role", "link", "click", "--name", "Projects", "--exact");
+    assert.equal(await evaluate('location.hash'), "#builder-projects");
+    await browser("find", "role", "button", "click", "--name", "Add project", "--exact");
+    await browser("fill", field("projects.0.name"), "Parser");
+    await browser("fill", field("projects.0.description"), "A small text parser");
+    await browser("find", "role", "button", "click", "--name", "Add bullet", "--exact");
+    await browser("fill", field("projects.0.bullets"), "Parsed structured inputs");
+    assert.equal(await evaluate('document.body.textContent.includes("Review bullet")'), false);
+    await browser("find", "role", "button", "click", "--name", "Add qualification", "--exact");
+    await browser("fill", field("education.0.institution"), "College");
+    await browser("fill", field("education.0.credential"), "BSc");
+    await browser("find", "role", "button", "click", "--name", "Add skill", "--exact");
+    await browser("fill", field("skills.0.name"), "TypeScript");
+    await browser("find", "role", "button", "click", "--name", "Review current draft", "--exact");
+    await waitFor('document.querySelector(".builder-review")?.textContent.includes("Parsed structured inputs")');
+    assert.equal(await evaluate('document.activeElement.id'), "review-heading");
+    assert.equal(writes, beforeCreate);
+    assert.equal(await evaluate('Array.from(document.querySelectorAll("button")).find(b => b.textContent === "Download saved resume PDF").disabled'), true);
+    await browser("fill", field("name"), "Reviewed New Candidate");
+    assert.equal(await evaluate('document.querySelector(".builder-review") === null'), true);
+    await browser("click", ".builder-form button[type=submit]");
+    await waitFor('document.body.textContent.includes("Saved as version 1.")');
+    assert.equal(profile.masterResume.projects[0]?.name, "Parser");
+    assert.equal(profile.masterResume.education[0]?.credential, "BSc");
+    assert.equal(profile.masterResume.skills[0]?.name, "TypeScript");
+    masterPdfStatus = 503;
+    await browser("find", "role", "button", "click", "--name", "Download saved resume PDF", "--exact");
+    await waitFor('document.body.textContent.includes("PDF download failed")');
+    masterPdfStatus = 200;
+    await browser("find", "role", "button", "click", "--name", "Download saved resume PDF", "--exact");
+    await waitFor('document.body.textContent.includes("Saved resume PDF download started")');
+    assert.equal(masterPdfCalls, 2);
+    assert.equal(coachingCalls, 0);
+    assert.equal(writes, beforeCreate + 1);
+    await browser("reload");
+    await waitFor('document.querySelector("input[name=name]")?.value === "Reviewed New Candidate"');
+    await browser("find", "role", "button", "click", "--name", "Review current draft", "--exact");
+    for (const [name, width, height] of [["guided-desktop", "1440", "1000"], ["guided-mobile", "390", "844"]]) {
+      await browser("set", "viewport", width!, height!);
+      await evaluate("window.scrollTo(0, 0)");
+      await browser("screenshot", join(captures, name + ".png"));
+      await browser("screenshot", join(captures, name + "-full.png"), "--full");
+      await evaluate('document.querySelector("#builder-review").scrollIntoView()');
+      await browser("screenshot", join(captures, name + "-review.png"));
+      assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
+    }
+    const builderA11y = await browser("a11y", "--selector", ".resume-builder");
+    assert.equal(builderA11y.counts.violations, 0, JSON.stringify(builderA11y.violations));
+    console.log("PASS: public creation, section guidance, draft review, PDF recovery, no hosted coaching, reload, desktop/mobile and accessibility.");
     await browser("open", webOrigin + "/account");
     await waitFor('document.body.textContent.includes("Signed in as candidate@example.test")');
     await browser("find", "role", "button", "click", "--name", "Sign out of Aperture", "--exact");
