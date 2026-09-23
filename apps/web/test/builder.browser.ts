@@ -8,8 +8,9 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import { MasterResumeSchema, ReferenceListSchema, type ReferenceList } from "@aperture/shared";
+import { DEFAULT_TEMPLATE, MasterResumeSchema, ReferenceListSchema, TemplateSchema, type ReferenceList, type ResumeTemplate } from "@aperture/shared";
 import { emptyResume } from "../src/app/builder/form-data.js";
+import { renderResumePdf } from "../../api/src/lib/pdf-export.js";
 
 async function main() {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
@@ -57,6 +58,8 @@ async function main() {
   const uploadedTypes: string[] = [];
   let masterPdfStatus = 200;
   let masterPdfCalls = 0;
+  let selectedTemplate: ResumeTemplate = DEFAULT_TEMPLATE;
+  let templateSaves = 0;
   const listingId = "00000000-0000-4000-8000-000000000002";
   const listing = { id: listingId, source: "manual", url: "javascript:alert(1)", title: "Synthetic Backend Engineer",
     company: "Example Company", description: "Build reliable APIs. <script>bad()</script>", location: "Remote", salary: null, postedAt: null };
@@ -150,6 +153,19 @@ async function main() {
         send({ resume, layoutFindings: [{ issue: "Two columns", atsRisk: "high", fix: "Use one column" }] }, uploadStatus);
         return;
       }
+      if (req.url?.startsWith("/v1/templates/library")) {
+        const q = new URL(req.url, webOrigin).searchParams.get("q")?.toLowerCase() ?? "";
+        const catalog = [DEFAULT_TEMPLATE, TemplateSchema.parse({ ...DEFAULT_TEMPLATE,
+          id: "technical-sidebar", name: "Technical sidebar", tags: ["technical", "two column"],
+          layout: { ...DEFAULT_TEMPLATE.layout, columns: 2, sidebar: ["skills"] },
+          atsCompatibility: { score: 75, warnings: ["Two columns can change reading order in some ATS parsers."] },
+        })];
+        send(catalog.filter((item) => !q || [item.name, ...item.tags].some((text) => text.toLowerCase().includes(q))));
+        return;
+      }
+      if (req.url === "/v1/templates/active" && req.method === "GET") {
+        send({ template: selectedTemplate, saved: templateSaves > 0 }); return;
+      }
       if (req.url === "/v1/auth/me") {
         send({ id: "synthetic-user", email: "candidate@example.test" });
         return;
@@ -197,6 +213,15 @@ async function main() {
         profile.referenceList = ReferenceListSchema.parse(JSON.parse(body));
         send(profile);
         return;
+      }
+      if (req.url === "/v1/templates/preview" && req.method === "POST") {
+        const pdf = await renderResumePdf(profile.masterResume, TemplateSchema.parse(JSON.parse(body)));
+        res.writeHead(200, { "content-type": "application/pdf" }).end(Buffer.from(pdf));
+        return;
+      }
+      if (req.url === "/v1/templates/active" && req.method === "PUT") {
+        selectedTemplate = TemplateSchema.parse(JSON.parse(body)); templateSaves++;
+        send(selectedTemplate); return;
       }
       send({ error: "not_found" }, 404);
     } catch {
@@ -720,6 +745,31 @@ async function main() {
     const builderA11y = await browser("a11y", "--selector", ".resume-builder");
     assert.equal(builderA11y.counts.violations, 0, JSON.stringify(builderA11y.violations));
     console.log("PASS: public creation, section guidance, draft review, PDF recovery, no hosted coaching, reload, desktop/mobile and accessibility.");
+    await browser("open", webOrigin + "/templates");
+    await waitFor('document.body.textContent.includes("Technical sidebar")');
+    assert.equal(await evaluate('document.body.textContent.includes("Bring your own template")'), false);
+    await browser("fill", "#template-query", "technical");
+    await browser("find", "role", "button", "click", "--name", "Search", "--exact");
+    await waitFor('document.querySelectorAll(".template-option").length === 1');
+    await browser("find", "role", "button", "click", "--name", "Review this design", "--exact");
+    await waitFor('document.querySelector("#template-editor") !== null');
+    assert.equal(await evaluate('document.body.textContent.includes("ATS compatibility 75/100")'), true);
+    assert.equal(await evaluate('Array.from(document.querySelectorAll("button")).find(b => b.textContent === "Save this design").disabled'), true);
+    await browser("find", "role", "button", "click", "--name", "Preview with my resume", "--exact");
+    await waitFor('document.querySelector(".template-preview iframe") !== null');
+    await browser("find", "role", "button", "click", "--name", "Save this design", "--exact");
+    await waitFor('document.body.textContent.includes("Template saved")');
+    assert.equal(await evaluate('document.body.textContent.includes("tailored PDF")'), false);
+    assert.equal(selectedTemplate.id, "technical-sidebar");
+    assert.equal(templateSaves, 1);
+    for (const [name, width, height] of [["desktop", "1440", "1000"], ["mobile", "390", "844"]]) {
+      await browser("set", "viewport", width!, height!);
+      await browser("screenshot", join(captures, `templates-${name}.png`), "--full");
+      assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
+    }
+    const templateA11y = await browser("a11y", "--selector", ".template-page");
+    assert.equal(templateA11y.counts.violations, 0, JSON.stringify(templateA11y.violations));
+    console.log("PASS: public template search, warning, preview-before-save, persistence, mobile and accessibility.");
     await browser("open", webOrigin + "/account");
     await waitFor('document.body.textContent.includes("Signed in as candidate@example.test")');
     await browser("find", "role", "button", "click", "--name", "Sign out of Aperture", "--exact");

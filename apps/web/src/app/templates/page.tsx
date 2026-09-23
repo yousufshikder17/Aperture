@@ -94,7 +94,7 @@ export default function Templates() {
         method: "PUT", body: JSON.stringify(draft),
       }));
       setActive(saved); setDraft(saved);
-      setStatus("Template saved. Master and tailored PDF downloads now use this design.");
+      setStatus("Template saved. Your master resume PDF now uses this design.");
     } catch { setError("Template could not be saved. Your draft is still here; try again."); }
     finally { pending.current = false; setBusy(""); }
   }
