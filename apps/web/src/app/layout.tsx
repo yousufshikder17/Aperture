@@ -14,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Document navigation preserves native unsaved-draft warnings on Back/Forward. */}
           <a href="/">Aperture</a>
           <a href="/builder">Builder</a>
+          <a href="/templates">Templates</a>
           <a href="/listings">Listings</a>
           <a href="/applications">Applications</a>
           <a href="/resources">Resources</a>

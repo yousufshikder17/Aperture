@@ -519,7 +519,7 @@ function ResumeForm({
         {(dirty || !version || imported) && <p className="muted">Save your resume to enable PDF download.</p>}
         {downloadMessage && <p role="status">{downloadMessage}</p>}
         {review && <ResumeReview resume={review} />}
-        <p className="muted">After saving, you can explore market suggestions or add references below. References are saved separately.</p>
+        <p className="muted">After saving, you can explore market suggestions, choose a <a href="/templates">PDF template</a>, or add references below. References are saved separately.</p>
       </section>
     </form>
     </>
