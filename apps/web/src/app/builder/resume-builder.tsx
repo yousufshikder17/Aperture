@@ -3,19 +3,16 @@
 import React, {
   useCallback,
   useEffect,
-  useId,
   useRef,
   useState,
 } from "react";
 import {
   MasterResumeSchema,
-  BulletSuggestionSchema,
   type MasterResume,
-  type BulletSuggestion,
   VersionSummarySchema,
   type VersionSummary,
 } from "@aperture/shared";
-import { api, ApiError, UpgradeRequiredError } from "../../lib/api";
+import { api, ApiError } from "../../lib/api";
 import { emptyResume, resumeFromForm } from "./form-data";
 import ResumeImport from "./resume-import";
 import { useUnsavedChanges } from "./use-unsaved-changes";
@@ -27,147 +24,11 @@ type Profile = { masterResume: MasterResume | null; version: number };
 type Version = VersionSummary;
 
 function message(error: unknown, fallback: string) {
-  if (error instanceof UpgradeRequiredError)
-    return "Your coaching allowance is used up. You can still edit and save manually.";
   if (error instanceof ApiError && error.status === 401)
     return "Authentication is required. Check your configured sign-in or local development credential, then retry.";
   if (error instanceof ApiError && error.status === 403)
     return "Your account does not have access to this action.";
-  if (error instanceof ApiError && error.status === 501)
-    return "Bullet coaching is disabled. You can still edit and save manually.";
   return fallback;
-}
-
-
-function Bullet({
-  name,
-  initial,
-  dirty,
-}: {
-  name: string;
-  initial: string;
-  dirty: () => void;
-}) {
-  const [value, setValue] = useState(initial);
-  const [suggestion, setSuggestion] = useState<BulletSuggestion | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const revision = useRef(0);
-  const pending = useRef(false);
-  const input = useRef<HTMLTextAreaElement>(null);
-  const id = useId();
-  useEffect(
-    () => () => {
-      revision.current++;
-    },
-    [],
-  );
-
-  async function review() {
-    if (pending.current || !value.trim()) return;
-    pending.current = true;
-    setBusy(true);
-    setError("");
-    setSuggestion(null);
-    const requested = revision.current;
-    try {
-      const result = BulletSuggestionSchema.parse(
-        await api("/builder/improve-bullet", {
-          method: "POST",
-          body: JSON.stringify({ bullet: value }),
-        }),
-      );
-      if (requested === revision.current) setSuggestion(result);
-    } catch (cause) {
-      if (requested === revision.current)
-        setError(
-          message(
-            cause,
-            "Coaching could not finish. Your bullet is unchanged; try again or continue manually.",
-          ),
-        );
-    } finally {
-      pending.current = false;
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="builder-bullet">
-      <label htmlFor={id}>Resume bullet</label>
-      <textarea
-        ref={input}
-        id={id}
-        name={name}
-        rows={3}
-        value={value}
-        onChange={(event) => {
-          setValue(event.target.value);
-          revision.current++;
-          setSuggestion(null);
-          setError("");
-          dirty();
-        }}
-      />
-      <button type="button" disabled={busy || !value.trim()} onClick={review}>
-        {busy ? "Reviewing bullet…" : "Review bullet"}
-      </button>
-      {error && (
-        <p role="alert" className="builder-error">
-          {error}
-        </p>
-      )}
-      {suggestion && (
-        <div className="builder-suggestion" aria-label="Bullet suggestion">
-          <h3>Suggested wording — review before applying</h3>
-          <p>{suggestion.rewrite}</p>
-          <p className="muted">{suggestion.rationale}</p>
-          {suggestion.issues.length > 0 && (
-            <ul>
-              {suggestion.issues.map((issue, i) => (
-                <li key={i}>{issue.note}</li>
-              ))}
-            </ul>
-          )}
-          {suggestion.metricPrompts.length > 0 && (
-            <>
-              <h3>Details only you can supply</h3>
-              <ul>
-                {suggestion.metricPrompts.map((prompt, i) => (
-                  <li key={i}>{prompt}</li>
-                ))}
-              </ul>
-            </>
-          )}
-          <p className="muted">
-            Check every fact and replace any placeholders. Nothing is applied
-            automatically.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setValue(suggestion.rewrite);
-              revision.current++;
-              setSuggestion(null);
-              dirty();
-              input.current?.focus();
-            }}
-          >
-            Apply suggested wording
-          </button>{" "}
-          <button
-            type="button"
-            onClick={() => {
-              setSuggestion(null);
-              input.current?.focus();
-            }}
-          >
-            Keep my wording
-          </button>
-        </div>
-      )}
-    </div>
-  );
 }
 
 function Bullets({
@@ -191,7 +52,7 @@ function Bullets({
       >
         {(value) => (
           <div className="builder-wide">
-            <Bullet name={`${prefix}.bullets`} initial={value} dirty={dirty} />
+            <Field name={`${prefix}.bullets`} label="Resume bullet" value={value} multiline />
           </div>
         )}
       </Collection>

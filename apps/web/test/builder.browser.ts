@@ -377,12 +377,10 @@ async function main() {
     assert.equal(profile.masterResume.basics.name, "Updated Candidate");
     historyFails = false;
 
-    await browser("find", "role", "button", "click", "--name", "Review bullet", "--exact");
-    await waitFor('document.body.textContent.includes("Coaching could not finish")');
+    assert.equal(await evaluate('document.body.textContent.includes("Review bullet")'), false);
     assert.equal(await evaluate('document.getElementsByName("experience.0.bullets")[0].value'), "Built a parser");
-    assert.equal(await evaluate('document.body.textContent.includes("Apply suggested wording")'), false);
     await browser("fill", field("experience.0.bullets"), "My newer wording");
-    assert.equal(coachingCalls, 1);
+    assert.equal(coachingCalls, 0);
     await browser("click", ".builder-form button[type=submit]");
     await waitFor('document.body.textContent.includes("Saved as version 3.")');
     assert.deepEqual(profile.masterResume.experience[0]?.bullets, [
@@ -479,7 +477,7 @@ async function main() {
       'document.querySelector("input[name=name]")?.value === "Updated Candidate"',
     );
     console.log(
-      "PASS: load, native validation, save failure/retry, preservation, history failure, unavailable coaching preserves manual editing, add/remove row identity, reload, authentication, mobile overflow, accessibility.",
+      "PASS: load, native validation, save failure/retry, preservation, history failure, manual bullets without hosted coaching, add/remove row identity, reload, authentication, mobile overflow, accessibility.",
     );
     const selectImport = async (name: string) => {
       // Exercise the native file input, not a script-assigned synthetic FileList.
