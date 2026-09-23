@@ -9,6 +9,7 @@ import { listingRoutes } from "./routes/listings.js";
 import { applicationRoutes } from "./routes/applications.js";
 import { resourceRoutes } from "./routes/resources.js";
 import { analyticsRoutes } from "./routes/analytics.js";
+import { templateRoutes } from "./routes/templates.js";
 import { buildDigest } from "./jobs/digest.js";
 
 // Business and authorization logic lives in the Hono API.
@@ -45,6 +46,7 @@ v1.route("/listings", listingRoutes);
 v1.route("/applications", applicationRoutes);
 v1.route("/resources", resourceRoutes);
 v1.route("/analytics", analyticsRoutes);
+v1.route("/templates", templateRoutes);
 // Today's top listings worth applying to (same payload the daily cron emails).
 v1.get("/digest", async (c) => c.json(await buildDigest(c.get("user").id)));
 
