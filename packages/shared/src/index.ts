@@ -5,3 +5,4 @@ export * from "./listing.js";
 export * from "./listing-workflow.js";
 export * from "./resources.js";
 export * from "./tiers.js";
+export * from "./template.js";

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "clean-classic", "name": "Clean classic", "source": "library",
+    "tags": ["minimal", "ATS safe", "classic"], "bestFor": ["all roles"],
+    "layout": { "columns": 1, "sectionOrder": ["summary", "experience", "projects", "skills", "education"], "sidebar": [] },
+    "type": { "fontFamily": "Helvetica", "nameSize": 18, "headingSize": 11, "bodySize": 10 },
+    "color": { "primary": "#1a1a1a", "accent": "#1a1a1a", "text": "#1a1a1a" },
+    "spacing": { "margin": 50, "sectionGap": 8, "bulletStyle": "bullet" },
+    "atsCompatibility": { "score": 100, "warnings": [] }
+  },
+  {
+    "id": "editorial", "name": "Editorial", "source": "library",
+    "tags": ["editorial", "serif", "traditional"], "bestFor": ["research", "education", "policy"],
+    "layout": { "columns": 1, "sectionOrder": ["summary", "experience", "education", "projects", "skills"], "sidebar": [] },
+    "type": { "fontFamily": "TimesRoman", "nameSize": 22, "headingSize": 12, "bodySize": 10 },
+    "color": { "primary": "#172433", "accent": "#455a70", "text": "#172433" },
+    "spacing": { "margin": 56, "sectionGap": 12, "bulletStyle": "dash" },
+    "atsCompatibility": { "score": 100, "warnings": [] }
+  },
+  {
+    "id": "technical-sidebar", "name": "Technical sidebar", "source": "library",
+    "tags": ["technical", "two column", "compact"], "bestFor": ["engineering", "design"],
+    "layout": { "columns": 2, "sectionOrder": ["summary", "experience", "projects", "skills", "education"], "sidebar": ["skills", "education"] },
+    "type": { "fontFamily": "Helvetica", "nameSize": 20, "headingSize": 11, "bodySize": 9 },
+    "color": { "primary": "#182f40", "accent": "#b35e32", "text": "#182f40" },
+    "spacing": { "margin": 44, "sectionGap": 10, "bulletStyle": "bullet" },
+    "atsCompatibility": { "score": 75, "warnings": ["Two columns can change reading order in some ATS parsers."] }
+  }
+]

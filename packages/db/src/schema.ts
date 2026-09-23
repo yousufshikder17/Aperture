@@ -16,6 +16,7 @@ import type {
   MasterResume,
   MatchScore,
   ReferenceList,
+  ResumeTemplate,
 } from "@aperture/shared";
 
 export const tierEnum = pgEnum("tier", ["free", "pro"]);
@@ -61,6 +62,7 @@ export const profiles = pgTable("profiles", {
     .references(() => users.id),
   masterResume: jsonb("master_resume").$type<MasterResume>(),
   referenceList: jsonb("reference_list").$type<ReferenceList>(),
+  template: jsonb("template").$type<ResumeTemplate>(),
   version: integer("version").notNull().default(1),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
