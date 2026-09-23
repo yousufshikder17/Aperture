@@ -109,6 +109,22 @@ saves, market errors/retry, score display, and cancelling navigation with unsave
 The regression also checks from-scratch creation, draft review, PDF retry, mobile
 layout, and that the builder makes no hosted coaching request.
 
+## Resume templates
+
+The `/templates` page searches the curated, repository-hosted
+[`resources/templates.json`](./resources/templates.json) catalog by style, role,
+layout, or ATS compatibility. Choose a design, adjust its type, colors, spacing,
+section order, and sidebar, then preview it with your saved master resume before
+saving. Two-column designs carry an ATS reading-order warning. The choice is
+stored separately from resume content and changes only future master-resume PDF
+downloads; without a choice, the clean ATS-safe design remains the default.
+
+The public edition offers manual customization but no template-upload or PDF
+vision extraction route. Catalog additions are reviewed as JSON changes in the
+repository. Run `npm run db:push` after updating to add the profile's `template`
+column. The browser regression uses synthetic API responses; live PostgreSQL
+persistence remains a deployment check.
+
 ## Public feature boundary
 
 Market suggestions and version history validate their response contracts. Listing
@@ -119,6 +135,7 @@ pending values and genuine zero scores. Hosted master-resume audits, reference
 assessments, and their UI controls are intentionally excluded.
 
 - Resume/profile creation, import, versioning, and PDF export
+- Curated resume templates, manual styling, preview, and saved master-PDF selection
 - Job ingestion, listing storage, and application tracking
 - Deterministic matching with published weights: skills 45%, experience 25%, seniority 20%, location 10%
 - ATS-style keyword coverage and lightweight missing-skill analysis
