@@ -156,9 +156,19 @@ function ResumeForm({
           {error}
         </p>
       )}
+      <nav className="builder-guide" aria-label="Resume sections">
+        <ol>
+          {[
+            ["basics", "About you"], ["links", "Links"],
+            ["experience", "Experience"], ["projects", "Projects"],
+            ["education", "Education"], ["skills", "Skills"],
+            ["additional", "Additional details"], ["review", "Review and finish"],
+          ].map(([id, label]) => <li key={id}><a href={`#builder-${id}`}>{label}</a></li>)}
+        </ol>
+      </nav>
       <fieldset disabled={saving} className="builder-fields">
         <legend className="builder-sr-only">Resume details</legend>
-        <section className="builder-section" aria-labelledby="basics-heading">
+        <section id="builder-basics" className="builder-section" aria-labelledby="basics-heading">
           <h2 id="basics-heading">About you</h2>
           <p className="muted">
             Name and email are required. Everything else can be added when you
@@ -182,6 +192,7 @@ function ResumeForm({
               name="headline"
               label="Headline"
               value={resume.basics.headline}
+              hint="Describe your role or specialty in a short phrase."
             />
             <Field
               name="location"
@@ -199,7 +210,7 @@ function ResumeForm({
               label="Target roles"
               value={resume.targetRoles.join("\n")}
               multiline
-              hint="One role per line."
+              hint="One role per line. These guide matching."
             />
           </div>
           <Field
@@ -207,11 +218,13 @@ function ResumeForm({
             label="Summary"
             value={resume.summary}
             multiline
+            hint="Introduce your strengths, relevant experience, and the kind of work you want to do."
           />
         </section>
         <Collection
           name="links"
           title="Links"
+          description="Add a portfolio, professional profile, or work sample you want employers to see."
           singular="Link"
           initial={resume.basics.links}
           create={() => ({ label: "", url: "" })}
@@ -237,6 +250,7 @@ function ResumeForm({
         <Collection
           name="experience"
           title="Experience"
+          description="Start with your most recent role. For each bullet, describe what you did, how you did it, and the result. Include numbers only when you can support them."
           singular="Role"
           initial={resume.experience}
           create={() => ({
@@ -295,6 +309,7 @@ function ResumeForm({
         <Collection
           name="projects"
           title="Projects"
+          description="Show relevant work from study, volunteering, or personal projects. Explain your contribution and what it achieved."
           singular="Project"
           initial={resume.projects}
           create={() => ({
@@ -335,6 +350,7 @@ function ResumeForm({
         <Collection
           name="education"
           title="Education"
+          description="Add qualifications relevant to your target roles. You can include a degree still in progress."
           singular="Qualification"
           initial={resume.education}
           create={() => ({
@@ -379,6 +395,7 @@ function ResumeForm({
         <Collection
           name="skills"
           title="Skills"
+          description="List skills you can demonstrate and connect them to the roles or projects where you used them."
           singular="Skill"
           initial={resume.skills}
           create={() => ({ name: "", category: "", level: null, evidence: [] })}
@@ -418,10 +435,12 @@ function ResumeForm({
           )}
         </Collection>
         <section
+          id="builder-additional"
           className="builder-section"
           aria-labelledby="additional-heading"
         >
           <h2 id="additional-heading">Additional details</h2>
+          <p className="muted">Optional: include credentials, publications, or recognition that support your application.</p>
           <Field
             name="certifications"
             label="Certifications"

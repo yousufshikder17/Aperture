@@ -51,6 +51,7 @@ export function Collection<T>({
   create,
   dirty,
   children,
+  description,
 }: {
   name: string;
   title: string;
@@ -59,6 +60,7 @@ export function Collection<T>({
   create: () => T;
   dirty: () => void;
   children: (value: T, prefix: string) => ReactNode;
+  description?: string;
 }) {
   const [rows, setRows] = useState(() =>
     initial.map((value, id) => ({ value, id })),
@@ -67,8 +69,9 @@ export function Collection<T>({
   const section = useRef<HTMLElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   return (
-    <section ref={section} className="builder-section" aria-label={title}>
+    <section id={`builder-${name}`} ref={section} className="builder-section" aria-label={title}>
       <h2>{title}</h2>
+      {description && <p className="muted">{description}</p>}
       {rows.length === 0 && (
         <p className="muted">
           No {title.toLowerCase()} added. Add only what belongs on your resume.
