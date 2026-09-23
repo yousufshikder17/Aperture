@@ -12,13 +12,14 @@ import {
   VersionSummarySchema,
   type VersionSummary,
 } from "@aperture/shared";
-import { api, ApiError } from "../../lib/api";
+import { api, ApiError, fetchMasterResumePdf } from "../../lib/api";
 import { emptyResume, resumeFromForm } from "./form-data";
 import ResumeImport from "./resume-import";
 import { useUnsavedChanges } from "./use-unsaved-changes";
 import { Field, Collection } from "./builder-fields";
 import ReferencesEditor from "./references-editor";
 import BuilderInsights, { formatScore } from "./builder-insights";
+import ResumeReview from "./resume-review";
 
 type Profile = { masterResume: MasterResume | null; version: number };
 type Version = VersionSummary;
@@ -77,12 +78,50 @@ function ResumeForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
+  const [review, setReview] = useState<MasterResume | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadMessage, setDownloadMessage] = useState("");
+  const downloadRequest = useRef<AbortController | null>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
   const pending = useRef(false);
   const errorBox = useRef<HTMLParagraphElement>(null);
   const changed = () => {
     setDirty(true);
     setSaved("");
+    setReview(null);
+    setDownloadMessage("");
   };
+
+  useEffect(() => () => downloadRequest.current?.abort(), []);
+  useEffect(() => { if (review) reviewHeading.current?.focus(); }, [review]);
+
+  async function download() {
+    if (downloadRequest.current || dirty || saving || !version) return;
+    const controller = new AbortController();
+    downloadRequest.current = controller;
+    setDownloading(true);
+    setDownloadMessage("");
+    setError("");
+    try {
+      const blob = await fetchMasterResumePdf(controller.signal);
+      if (controller.signal.aborted) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "resume-master.pdf";
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setDownloadMessage("Saved resume PDF download started.");
+    } catch (cause) {
+      if (!controller.signal.aborted) setError(message(cause, "PDF download failed. Your resume is unchanged. Try downloading again."));
+    } finally {
+      downloadRequest.current = null;
+      if (!controller.signal.aborted) setDownloading(false);
+    }
+  }
 
   useUnsavedChanges(dirty);
   useEffect(() => {
@@ -93,6 +132,7 @@ function ResumeForm({
     <>
     <ResumeImport disabled={saving} onAccept={onImport} />
     <form
+      ref={form}
       className="builder-form"
       onChange={changed}
       onSubmit={async (event) => {
@@ -464,6 +504,23 @@ function ResumeForm({
           />
         </section>
       </fieldset>
+      <section id="builder-review" className="builder-section" aria-labelledby="review-heading">
+        <h2 id="review-heading" ref={reviewHeading} tabIndex={-1}>Review and finish</h2>
+        <p className="muted">Check your wording and facts before saving. This review shows your current draft; the PDF uses your saved resume.</p>
+        <div className="builder-actions">
+          <button type="button" disabled={saving} onClick={() => {
+            if (!form.current?.reportValidity()) return;
+            setReview(resumeFromForm(new FormData(form.current)));
+          }}>Review current draft</button>
+          <button type="button" disabled={dirty || saving || downloading || !version || imported} onClick={() => void download()}>
+            {downloading ? "Preparing PDF…" : "Download saved resume PDF"}
+          </button>
+        </div>
+        {(dirty || !version || imported) && <p className="muted">Save your resume to enable PDF download.</p>}
+        {downloadMessage && <p role="status">{downloadMessage}</p>}
+        {review && <ResumeReview resume={review} />}
+        <p className="muted">After saving, you can explore market suggestions or add references below. References are saved separately.</p>
+      </section>
     </form>
     </>
   );
@@ -552,7 +609,7 @@ export default function ResumeBuilder() {
               requestAnimationFrame(() => document.querySelector<HTMLInputElement>('input[name="name"]')?.focus());
             }}
             resume={profile.masterResume ?? emptyResume()}
-            version={profile.version}
+            version={profile.masterResume ? profile.version : 0}
             onSaved={(version, masterResume) => {
               setImported(false);
               setProfile((current) =>

@@ -36,6 +36,16 @@ export class ApiError extends Error {
   }
 }
 
+export async function fetchMasterResumePdf(signal?: AbortSignal) {
+  const response = await fetch("/api/backend/profile/pdf",
+    { credentials: "same-origin", cache: "no-store", redirect: "error", signal });
+  if (!response.ok) throw new ApiError(response.status);
+  if (response.headers.get("content-type")?.split(";")[0] !== "application/pdf") throw new Error("invalid_pdf");
+  const blob = await response.blob();
+  if (!blob.size || await blob.slice(0, 5).text() !== "%PDF-") throw new Error("invalid_pdf");
+  return blob;
+}
+
 export class UpgradeRequiredError extends Error {
   constructor(public detail: unknown) {
     super("upgrade_required");
