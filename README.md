@@ -76,9 +76,15 @@ create a profile version. Failed saves retain the draft; failed profile loads
 block editing instead of treating an unavailable profile as empty. Unsaved work
 stays in memory, with navigation warnings, not browser storage.
 
-The shared interface includes optional bullet-coaching controls, but hosted coaching
-is not included in this public edition. An unavailable coaching endpoint does not
-block manual editing or saving. References have their own editor and save action;
+Section links and writing prompts guide the form. **Review current draft** checks
+required fields and shows the current content before saving; another edit clears
+that review. **Download saved resume PDF** becomes available after saving, checks
+the returned file, and offers retry on failure. Review and download create no
+extra resume versions.
+
+Experience and project bullets are edited manually. Hosted bullet coaching is
+outside this public edition, so the builder has no coaching control. References
+have their own editor and save action;
 reference failures preserve the draft and do not alter the saved resume.
 PDF/DOCX imports support extraction review, layout findings, explicit replacement,
 and editing before saving. Extraction uses the configured AI provider; accepting
@@ -100,7 +106,8 @@ fallback is disabled when an OIDC client is configured.
 The browser regression uses a local OIDC provider fixture for login, session-backed
 requests, account identity, and logout. It also covers imports, independent reference
 saves, market errors/retry, score display, and cancelling navigation with unsaved edits.
-Hosted coaching is treated as unavailable, matching this edition's actual API.
+The regression also checks from-scratch creation, draft review, PDF retry, mobile
+layout, and that the builder makes no hosted coaching request.
 
 ## Public feature boundary
 
