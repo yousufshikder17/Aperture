@@ -15,6 +15,6 @@ test("public builder insights expose market suggestions without hosted audit con
   const html = renderToStaticMarkup(React.createElement(BuilderInsights));
   assert.match(html, /Market suggestions/);
   assert.match(html, /Load market suggestions/);
-  assert.match(html, /not live market data/);
+  assert.match(html, /listings you have scored/);
   assert.doesNotMatch(html, /audit|Audit|allowance|coaching/);
 });

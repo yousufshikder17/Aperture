@@ -17,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <a href="/templates">Templates</a>
           <a href="/listings">Listings</a>
           <a href="/applications">Applications</a>
+          <a href="/gap-analysis">Gap analysis</a>
           <a href="/resources">Resources</a>
           <a href="/profile">Profile</a>
           <a href="/account">Account</a>

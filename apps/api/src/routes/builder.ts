@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { desc, eq } from "drizzle-orm";
-import { db, improvementHistory, profiles, resumeVersions } from "@aperture/db";
+import { db, improvementHistory, resumeVersions } from "@aperture/db";
 import { extractResumeFromDocx, extractResumeFromPdf } from "@aperture/ai";
-import { skillGapFrequency } from "@aperture/analytics";
+import { loadSkillGaps } from "../services/gap-analysis.js";
 import { MarketSuggestionSchema, VersionSummarySchema } from "@aperture/shared";
 
 export const DEFAULT_MAX_RESUME_UPLOAD_BYTES = 8 * 1024 * 1024;
@@ -22,8 +22,7 @@ export interface BuilderRouteDependencies {
   extractPdf?: typeof extractResumeFromPdf;
   extractDocx?: typeof extractResumeFromDocx;
   env?: Record<string, string | undefined>;
-  loadProfile?: (userId: string) => Promise<typeof profiles.$inferSelect | null>;
-  loadGaps?: typeof skillGapFrequency;
+  loadGaps?: typeof loadSkillGaps;
   loadVersions?: (userId: string) => Promise<Array<typeof resumeVersions.$inferSelect>>;
   loadScores?: (userId: string) => Promise<Array<typeof improvementHistory.$inferSelect>>;
 }
@@ -33,9 +32,7 @@ export function createBuilderRoutes(dependencies: BuilderRouteDependencies = {})
   const extractPdf = dependencies.extractPdf ?? extractResumeFromPdf;
   const extractDocx = dependencies.extractDocx ?? extractResumeFromDocx;
   const uploadLimit = maxResumeUploadBytes(dependencies.env);
-  const findProfile = dependencies.loadProfile ?? (async (userId: string) =>
-    (await db().select().from(profiles).where(eq(profiles.userId, userId)))[0] ?? null);
-  const findGaps = dependencies.loadGaps ?? skillGapFrequency;
+  const findGaps = dependencies.loadGaps ?? loadSkillGaps;
   const findVersions = dependencies.loadVersions ?? (async (userId: string) =>
     db().select().from(resumeVersions).where(eq(resumeVersions.userId, userId)).orderBy(desc(resumeVersions.version)));
   const findScores = dependencies.loadScores ?? (async (userId: string) =>
@@ -63,10 +60,7 @@ export function createBuilderRoutes(dependencies: BuilderRouteDependencies = {})
   builderRoutes.get("/market-suggestions", async (c) => {
     const user = c.get("user");
     const gaps = await findGaps(user.id);
-    const profile = await findProfile(user.id);
-    const targetRoles = new Set((profile?.masterResume?.targetRoles ?? []).map((role) => role.trim().toLowerCase()));
-    const relevant = targetRoles.size === 0 ? gaps : gaps.filter((gap) => targetRoles.has(String(gap.role_type ?? "").toLowerCase()));
-    return c.json(MarketSuggestionSchema.array().parse(relevant));
+    return c.json(MarketSuggestionSchema.array().parse(gaps));
   });
 
   builderRoutes.get("/versions", async (c) => {

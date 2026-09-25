@@ -11,7 +11,7 @@ const resume: MasterResume = {
   summary: null, experience: [], projects: [], education: [], skills: [], certifications: [],
   publications: [], awards: [], targetRoles: [" Engineer "],
 };
-test("builder route integration scopes loaders to the principal, filters roles and selects latest version scores", async () => {
+test("builder route integration scopes loaders to the principal and selects latest version scores", async () => {
   const calls: string[] = [];
   const now = new Date("2026-09-19T00:00:00Z");
   const app = new Hono();
@@ -22,7 +22,6 @@ test("builder route integration scopes loaders to the principal, filters roles a
     await next();
   });
   app.route("/builder", createBuilderRoutes({
-    loadProfile: async id => { calls.push(id); return { userId: id, masterResume: resume, version: 2, referenceList: null, updatedAt: now }; },
     loadGaps: async id => { calls.push(id); return [
       { skill: "Rust", role_type: "Engineer", listings_requiring: 1, listings_total: 2, frequency_pct: 50 },
       { skill: "Sales", role_type: "Sales", listings_requiring: 1, listings_total: 2, frequency_pct: 50 },
@@ -36,7 +35,7 @@ test("builder route integration scopes loaders to the principal, filters roles a
   const gaps = await app.request("/builder/market-suggestions?userId=attacker");
   assert.equal(gaps.status, 200);
   const suggestions = MarketSuggestionSchema.array().parse(await gaps.json());
-  assert.deepEqual(suggestions.map(row => row.skill), ["Rust"]);
+  assert.deepEqual(suggestions.map(row => row.skill), ["Rust", "Sales"]);
   const response = await app.request("/builder/versions");
   assert.equal(response.status, 200);
   const versions = VersionSummarySchema.array().parse(await response.json());
