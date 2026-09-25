@@ -1,55 +1,23 @@
-import { api } from "@/lib/server-api";
-
-interface ResourceRow {
-  id: string;
-  title: string;
-  url: string;
-  kind: string;
-  skills: string[];
-  level: string | null;
-  timeCommitment: string | null;
-  summary: string | null;
-  complexityFlag: string | null;
-}
+import React from "react";
+import { ResourcesView, type ResourceRow } from "./view";
+import { api, ApiError } from "@/lib/server-api";
 
 export default async function Resources({
   searchParams,
 }: {
-  searchParams: Promise<{ skill?: string }>;
+  searchParams: Promise<{ skill?: string; level?: string }>;
 }) {
-  const { skill } = await searchParams;
+  const { skill, level: requestedLevel } = await searchParams;
+  const level = requestedLevel ?? "";
   let rows: ResourceRow[] = [];
+  let error: string | null = null;
   try {
     rows = await api<ResourceRow[]>(`/resources${skill ? `?skill=${encodeURIComponent(skill)}` : ""}`);
-  } catch {
-    // empty state
+  } catch (cause) {
+    error = cause instanceof ApiError && cause.status === 401
+      ? "Sign in through Account to view learning resources."
+      : "Resources could not be loaded. Try applying the filter again.";
   }
 
-  return (
-    <>
-      <h1>Resource director</h1>
-      <p className="muted">
-        Curated registry, complexity-tagged at index time.
-        {skill && ` Filtered by gap: ${skill}.`}
-      </p>
-      {rows.length === 0 && (
-        <div className="card muted">Registry not synced yet — run npm run resources:sync.</div>
-      )}
-      {rows.map((r) => (
-        <div className="card" key={r.id}>
-          <a href={r.url}>
-            <strong>{r.title}</strong>
-          </a>{" "}
-          <span className="muted">
-            {r.kind}
-            {r.level && ` · ${r.level}`}
-            {r.timeCommitment && ` · ${r.timeCommitment}`}
-          </span>
-          {r.summary && <div>{r.summary}</div>}
-          <div className="muted">Covers: {r.skills.join(", ")}</div>
-          {r.complexityFlag && <div className="flag">{r.complexityFlag}</div>}
-        </div>
-      ))}
-    </>
-  );
+  return <ResourcesView rows={rows} error={error} skill={skill} level={level} />;
 }

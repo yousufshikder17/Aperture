@@ -1,3 +1,4 @@
+import { readFeed } from "./feed-reader.js";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { db, listings } from "@aperture/db";
 import type { ListingSource } from "@aperture/shared";
@@ -60,11 +61,7 @@ export async function scanFeeds(options: {
   for (const feed of feeds) {
     let items: RssItem[];
     try {
-      const res = await (options.fetch ?? fetch)(feed.url, {
-        headers: { "user-agent": "aperture/0.1" }, signal: AbortSignal.timeout(15_000),
-      });
-      if (!res.ok) throw new Error("feed_unavailable");
-      const text = await res.text();
+      const text = await readFeed(feed.url, options.fetch);
       if (XMLValidator.validate(text) !== true) throw new Error("invalid_feed");
       const xml = parser.parse(text);
       if (!xml?.rss?.channel || typeof xml.rss.channel !== "object") throw new Error("invalid_feed");

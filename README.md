@@ -154,3 +154,15 @@ npm run build
 ```
 
 No license is declared in this repository.
+
+## Live gaps and resource filters
+
+Gap analysis at `/gap-analysis` and builder market suggestions share a deterministic
+calculation over the signed-in user's scored listings and current saved resume.
+Each percentage uses the listing count for that role; no analytics refresh is
+needed for these two views. Other analytics still use the ETL job.
+
+Resources can be filtered by beginner, intermediate, or advanced level while
+retaining the skill filter. Feed ingestion remains administrator-only over the
+shared catalog; response bodies are limited to 2 MiB. No feed cache, personalized
+scan, hosted analysis, or listing-discovery migration is introduced by this port.
