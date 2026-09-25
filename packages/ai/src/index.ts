@@ -16,6 +16,7 @@ export {
 } from "./provider/index.js";
 
 export {
+  hasKeyword,
   extractKeywords,
   listingSkillTerms,
   resumeText,

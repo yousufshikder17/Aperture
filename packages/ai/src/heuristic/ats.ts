@@ -1,5 +1,5 @@
 import type { AtsSimulation, Listing, MasterResume } from "@aperture/shared";
-import { listingSkillTerms, resumeText } from "./keywords.js";
+import { listingSkillTerms, resumeText, hasKeyword } from "./keywords.js";
 
 // Heuristic (manual) ATS simulation — deterministic keyword matching, zero AI
 // cost. Arguably closer to how naive ATS software actually behaves than an
@@ -16,7 +16,7 @@ export function heuristicAtsSimulation(
   const matched: string[] = [];
   const missing: string[] = [];
   for (const kw of keywords) {
-    (haystack.includes(kw.term) ? matched : missing).push(kw.term);
+    (hasKeyword(haystack, kw.term) ? matched : missing).push(kw.term);
   }
 
   const coverage = keywords.length ? Math.round((matched.length / keywords.length) * 100) : 0;

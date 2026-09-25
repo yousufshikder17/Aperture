@@ -9,9 +9,8 @@ const STOPWORDS = new Set(
   ),
 );
 
-// Compact tech-skill dictionary: multiword terms matched by substring, single
-// terms matched by token. Deliberately broad-strokes — the registry and each
-// user's own profile/target roles extend it at call time.
+// Compact tech-skill dictionary matched at keyword boundaries, including
+// punctuation-bearing names such as C++ and Node.js. Profile skills extend it.
 export const SKILL_DICTIONARY = [
   "typescript", "javascript", "python", "java", "kotlin", "swift", "rust", "go", "c++", "c#",
   "react", "react native", "next.js", "vue", "angular", "svelte", "node.js", "hono", "express",
@@ -47,6 +46,15 @@ export interface RankedKeyword {
   inDictionary: boolean;
 }
 
+function keywordPattern(term: string): RegExp {
+  const escaped = normalize(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![a-z0-9+#])${escaped}(?![a-z0-9+#])`, "g");
+}
+
+export function hasKeyword(text: string, term: string): boolean {
+  return Boolean(normalize(term)) && keywordPattern(term).test(normalize(text));
+}
+
 /**
  * Ranked keywords from free text. Dictionary terms (built-in + extraTerms,
  * e.g. the user's profile skills and target roles) are matched even when
@@ -61,12 +69,7 @@ export function extractKeywords(text: string, extraTerms: string[] = []): Ranked
   const found = new Map<string, RankedKeyword>();
 
   for (const term of dictionary) {
-    let count = 0;
-    let index = norm.indexOf(term);
-    while (index !== -1) {
-      count++;
-      index = norm.indexOf(term, index + term.length);
-    }
+    const count = [...norm.matchAll(keywordPattern(term))].length;
     if (count > 0) found.set(term, { term, count, inDictionary: true });
   }
 
@@ -87,7 +90,7 @@ export function extractKeywords(text: string, extraTerms: string[] = []): Ranked
   );
 }
 
-/** Normalized haystack of everything the resume demonstrates, for substring checks. */
+/** Normalized text of the skills and experience demonstrated by the resume. */
 export function resumeText(profile: MasterResume): string {
   const parts: string[] = [
     profile.summary ?? "",
@@ -106,7 +109,7 @@ export function listingSkillTerms(
   limit = 25,
 ): RankedKeyword[] {
   const extra = profile
-    ? [...profile.skills.map((s) => s.name), ...profile.targetRoles]
+    ? profile.skills.map((s) => s.name)
     : [];
   return extractKeywords(listingText, extra).slice(0, limit);
 }

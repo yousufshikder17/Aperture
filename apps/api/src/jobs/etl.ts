@@ -9,7 +9,7 @@ import {
   users,
 } from "@aperture/db";
 import { analyticsDb } from "@aperture/analytics";
-import { listingSkillTerms, normalize, resumeText } from "@aperture/ai";
+import { listingSkillTerms, normalize, resumeText, hasKeyword } from "@aperture/ai";
 
 // Postgres → DuckDB ETL. Postgres stays pure OLTP; this job rebuilds the
 // analytical fact tables that power gap analysis, response rates, market
@@ -28,7 +28,7 @@ function roleTypeFor(listingTitle: string, targetRoles: string[]): string {
   const title = normalize(listingTitle);
   for (const role of targetRoles) {
     const tokens = normalize(role).split(" ").filter((t) => t.length > 2);
-    if (tokens.length && tokens.every((t) => title.includes(t))) return role;
+    if (tokens.length && tokens.every((t) => hasKeyword(title, t))) return role;
   }
   return "other";
 }
@@ -114,7 +114,7 @@ export async function runEtl(): Promise<{
             roleType,
             term.term,
             term.inDictionary, // dictionary skills count as "required"; loose tokens don't
-            haystack.includes(term.term),
+            hasKeyword(haystack, term.term),
             row.matches.createdAt.toISOString(),
           ]);
           skillCount++;
