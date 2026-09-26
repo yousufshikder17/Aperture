@@ -67,6 +67,18 @@ calls them. The browser suite covers scanning states, match failures/retry/reloa
 mobile layout and accessibility against synthetic services—not live feed/provider or
 PostgreSQL acceptance. Browser captures are saved under ignored `exports/browser-check`.
 
+## Application tracker
+
+Every authenticated public account can log a catalog listing at `/applications`
+or follow **Track application** from a listing. The tracker supports status changes,
+editable/clearable notes, and status history. Failed saves retain edits for retry.
+Job titles and companies remain visible after entries leave the latest catalog page.
+Feed scanning remains administrator-only; tracking does not submit applications to employers.
+No database migration or paid-plan gate is introduced by this port.
+
+See [tracker verification](docs/APPLICATION_TRACKER.md) for unit, route integration,
+PostgreSQL concurrency, browser, and accessibility checks.
+
 ## Guided resume builder
 
 The `/builder` page supports creating and editing the complete master resume:

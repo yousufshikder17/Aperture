@@ -11,6 +11,7 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { DEFAULT_TEMPLATE, MasterResumeSchema, ReferenceListSchema, TemplateSchema, type ReferenceList, type ResumeTemplate } from "@aperture/shared";
 import { emptyResume } from "../src/app/builder/form-data.js";
 import { renderResumePdf } from "../../api/src/lib/pdf-export.js";
+import { applicationFixture, checkApplications } from "./applications.browser-flow.js";
 
 async function main() {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
@@ -68,6 +69,7 @@ async function main() {
   let listingStatus = 200, matchStatus = 200, scanStatus = 403;
   let scanConfigured = false, hasMatch = false, matchCalls = 0;
   const listingRequests: string[] = [];
+  const trackerFixture = applicationFixture(listing);
   const apiServer = createServer(async (req, res) => {
     const requestUrl = new URL(req.url ?? "/", providerOrigin || "http://127.0.0.1");
     const providerJson = (value: unknown, status = 200) =>
@@ -123,11 +125,14 @@ async function main() {
       return;
     }
     try {
+      if (requestUrl.pathname.startsWith("/v1/applications")) {
+        await trackerFixture.handle(req, res); return;
+      }
       if (requestUrl.pathname.startsWith("/v1/listings")) {
         listingRequests.push(requestUrl.pathname);
         const route = requestUrl.pathname.slice("/v1/listings".length);
         const row = { listing, match: hasMatch ? listingMatch : null, profileVersion: hasMatch ? profile.version : null };
-        if (route === "" || route === "/") { send([row], listingStatus); return; }
+        if (route === "" || route === "/") { send(trackerFixture.omitFromCatalog ? [] : [row], listingStatus); return; }
         if (route === "/scan") { send({ configured: scanConfigured ? 1 : 0, succeeded: scanConfigured ? 1 : 0,
           scanned: scanConfigured ? 1 : 0, inserted: 0, failedSources: [] }, scanStatus); return; }
         if (route === "/" + listingId) { send(row, listingStatus); return; }
@@ -370,6 +375,12 @@ async function main() {
       'document.querySelector("input[name=name]")?.value === "Synthetic Candidate"',
     );
     assert.equal(await evaluate('document.cookie.includes("aperture-session")'), false);
+    if (process.env.TRACKER_BROWSER_ONLY === "1") {
+      const captures = resolve("../../exports/browser-check");
+      mkdirSync(captures, { recursive: true });
+      await checkApplications({ browser, evaluate, waitFor, origin: webOrigin, captures, listingId, fixture: trackerFixture });
+      return;
+    }
     await browser("snapshot", "-i");
     assert.equal(
       await evaluate('document.querySelector(".builder-form button[type=submit]").disabled'),
@@ -770,6 +781,8 @@ async function main() {
     const templateA11y = await browser("a11y", "--selector", ".template-page");
     assert.equal(templateA11y.counts.violations, 0, JSON.stringify(templateA11y.violations));
     console.log("PASS: public template search, warning, preview-before-save, persistence, mobile and accessibility.");
+    listingStatus = 200;
+    await checkApplications({ browser, evaluate, waitFor, origin: webOrigin, captures, listingId, fixture: trackerFixture });
     await browser("open", webOrigin + "/account");
     await waitFor('document.body.textContent.includes("Signed in as candidate@example.test")');
     await browser("find", "role", "button", "click", "--name", "Sign out of Aperture", "--exact");
