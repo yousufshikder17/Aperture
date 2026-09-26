@@ -1,0 +1,21 @@
+.application-tracker { overflow-wrap: anywhere; }
+.application-tracker a { color: var(--accent); text-underline-offset: .2em; }
+.application-section { border-top: 1px solid #2a323c; margin-top: 1.5rem; padding-top: 1.25rem; }
+.application-tracker h3 { font-size: 1.1rem; }
+.application-form { margin: 1rem 0; }
+.application-form fieldset { border: 0; padding: 0; min-width: 0; display: grid; gap: 1rem; }
+.application-legend { font-weight: bold; margin-bottom: .75rem; }
+.application-form label { display: grid; gap: .35rem; }
+.application-form select, .application-form textarea, .application-tracker button {
+  font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--muted);
+  border-radius: 4px; padding: .65rem .75rem; min-height: 44px; max-width: 100%;
+}
+.application-form select, .application-form textarea { width: 100%; }
+.application-form textarea { resize: vertical; }
+.application-tracker button { cursor: pointer; justify-self: start; }
+.application-tracker button:hover:not(:disabled) { border-color: var(--accent); }
+.application-tracker button:disabled { opacity: .55; cursor: not-allowed; }
+.application-tracker :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.application-error { color: var(--warn); margin: .75rem 0; }
+.application-tracker summary { cursor: pointer; padding: .5rem 0; }
+.application-tracker ol { padding-left: 1.5rem; }

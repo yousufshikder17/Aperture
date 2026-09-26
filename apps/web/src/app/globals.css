@@ -29,6 +29,7 @@ main {
 
 nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 1.25rem;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid #2a323c;

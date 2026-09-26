@@ -79,6 +79,7 @@ export function ListingWorkflow({ id }: { id: string }) {
     <h1>{row?.listing.title ?? "Listing match"}</h1>
     {row && <><p>{row.listing.company} · {row.listing.location ?? "Location unspecified"}{row.listing.salary && ` · ${row.listing.salary}`}</p>
       {externalUrl && <p><a href={externalUrl} target="_blank" rel="noopener noreferrer">Open original posting (new tab)</a></p>}
+      <p><a href={`/applications?listing=${encodeURIComponent(row.listing.id)}`}>Track application</a></p>
       <details className="listing-section"><summary>Read listing description</summary>
         <p className="listing-description">{row.listing.description || "No description provided."}</p>
       </details></>}
