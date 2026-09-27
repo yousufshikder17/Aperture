@@ -35,6 +35,26 @@ export const RegistrySchema = z.object({
 export const ProgressSchema = z.enum(["not_started", "in_progress", "completed"]);
 export type Progress = z.infer<typeof ProgressSchema>;
 
+export const ArchiveSaveSchema = z.object({
+  resourceId: z.string().trim().min(1).max(200), notes: z.string().max(10000).optional(),
+});
+export const ArchivePatchSchema = z.object({
+  progress: ProgressSchema.optional(), notes: z.string().max(10000).optional(),
+}).refine(value => value.progress !== undefined || value.notes !== undefined, "Provide progress or notes");
+export const ResourceSummarySchema = z.object({
+  id: z.string(), title: z.string(), url: z.string(), kind: z.string(), skills: z.array(z.string()),
+  level: z.string().nullable(), timeCommitment: z.string().nullable(), summary: z.string().nullable(),
+  complexityFlag: z.string().nullable().optional(),
+});
+export const ArchiveRecordSchema = z.object({
+  id: z.string().uuid(), resourceId: z.string(), progress: ProgressSchema, notes: z.string().nullable(),
+  savedAt: z.string(), updatedAt: z.string(),
+});
+export const ArchiveEntrySchema = ArchiveRecordSchema.extend({ resource: ResourceSummarySchema });
+export type ResourceSummary = z.infer<typeof ResourceSummarySchema>;
+export type ArchiveEntry = z.infer<typeof ArchiveEntrySchema>;
+export type ArchivePatch = z.infer<typeof ArchivePatchSchema>;
+
 // Aggregate gap analysis output ("73% of ML roles you target require PyTorch...").
 export const SkillGapSchema = z.object({
   skill: z.string(),

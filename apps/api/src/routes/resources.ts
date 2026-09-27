@@ -8,6 +8,9 @@ import { consumeQuota as defaultConsumeQuota } from "../middleware/tier.js";
 import { requireAdmin } from "../middleware/authorization.js";
 import { syncRegistry } from "../services/resource-sync.js";
 
+import { ArchiveSaveSchema, ArchivePatchSchema } from "@aperture/shared";
+import { listArchive, updateArchive } from "../services/resource-archive.js";
+
 async function requireResource(id: string) {
   const rows = await db().select().from(resources).where(eq(resources.id, id));
   return rows[0] ?? null;
@@ -39,6 +42,8 @@ async function persistArchivedResource(
 }
 
 export interface ResourceRouteDependencies {
+  listArchive?: typeof listArchive;
+  updateArchive?: typeof updateArchive;
   syncRegistry?: typeof syncRegistry;
   loadResource?: typeof requireResource;
   findArchivedResource?: typeof findArchivedResource;
@@ -46,10 +51,7 @@ export interface ResourceRouteDependencies {
   consumeQuota?: typeof defaultConsumeQuota;
 }
 
-const archiveSaveSchema = z.object({
-  resourceId: z.string(),
-  notes: z.string().optional(),
-});
+const archiveSaveSchema = ArchiveSaveSchema;
 type ArchiveSaveBody = z.infer<typeof archiveSaveSchema>;
 
 export function createResourceRoutes(
@@ -122,14 +124,7 @@ export function createResourceRoutes(
 
   resourceRoutes.get("/archive", async (c) => {
     const user = c.get("user");
-    const rows = await db()
-      .select()
-      .from(resourceArchive)
-      .innerJoin(resources, eq(resources.id, resourceArchive.resourceId))
-      .where(eq(resourceArchive.userId, user.id));
-    return c.json(
-      rows.map((r) => ({ ...r.resource_archive, resource: r.resources })),
-    );
+    return c.json(await (dependencies.listArchive ?? listArchive)(user.id));
   });
 
   const validateArchiveSave = zValidator(
@@ -165,30 +160,14 @@ export function createResourceRoutes(
 
   resourceRoutes.patch(
     "/archive/:id",
-    zValidator(
-      "json",
-      z.object({
-        progress: z
-          .enum(["not_started", "in_progress", "completed"])
-          .optional(),
-        notes: z.string().optional(),
-      }),
-    ),
+    zValidator("param", z.object({ id: z.string().uuid() })),
+    zValidator("json", ArchivePatchSchema),
     async (c) => {
       const user = c.get("user");
       const body = c.req.valid("json");
-      const rows = await db()
-        .update(resourceArchive)
-        .set({ ...body, updatedAt: new Date() })
-        .where(
-          and(
-            eq(resourceArchive.id, c.req.param("id")),
-            eq(resourceArchive.userId, user.id),
-          ),
-        )
-        .returning();
-      if (!rows[0]) return c.json({ error: "not_found" }, 404);
-      return c.json(rows[0]);
+      const row = await (dependencies.updateArchive ?? updateArchive)(user.id, c.req.valid("param").id, body);
+      if (!row) return c.json({ error: "not_found" }, 404);
+      return c.json(row);
     },
   );
 
