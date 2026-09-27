@@ -1,23 +1,21 @@
-import React from "react";
-import { ResourcesView, type ResourceRow } from "./view";
 import { api, ApiError } from "@/lib/server-api";
+import { ComplexityAssessmentSchema, ResourceSummarySchema, type ResourceSummary } from "@aperture/shared";
+import { ResourcesView as ResourceDirectory } from "./view";
+import "./resources.css";
 
-export default async function Resources({
-  searchParams,
-}: {
+export default async function Resources({ searchParams }: {
   searchParams: Promise<{ skill?: string; level?: string }>;
 }) {
   const { skill, level: requestedLevel } = await searchParams;
-  const level = requestedLevel ?? "";
-  let rows: ResourceRow[] = [];
+  const level = ComplexityAssessmentSchema.shape.level.safeParse(requestedLevel).data ?? "";
+  let rows: ResourceSummary[] = [];
   let error: string | null = null;
   try {
-    rows = await api<ResourceRow[]>(`/resources${skill ? `?skill=${encodeURIComponent(skill)}` : ""}`);
+    rows = ResourceSummarySchema.array().parse(await api(`/resources${skill ? `?skill=${encodeURIComponent(skill)}` : ""}`));
   } catch (cause) {
     error = cause instanceof ApiError && cause.status === 401
       ? "Sign in through Account to view learning resources."
       : "Resources could not be loaded. Try applying the filter again.";
   }
-
-  return <ResourcesView rows={rows} error={error} skill={skill} level={level} />;
+  return <ResourceDirectory rows={rows} skill={skill} level={level} error={error} />;
 }

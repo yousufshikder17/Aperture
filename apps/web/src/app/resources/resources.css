@@ -1,0 +1,20 @@
+.resource-workflow { overflow-wrap: anywhere; }
+.resource-workflow a { color: var(--accent); text-underline-offset: .2em; }
+.resource-section { border-top: 1px solid #2a323c; padding-top: 1rem; margin-top: 1.5rem; }
+.resource-section h2 { margin-top: 0; }
+.resource-workflow button, .resource-workflow select, .resource-workflow textarea {
+  color: var(--text); background: var(--panel); border: 1px solid var(--muted); border-radius: 4px;
+  font: inherit; padding: .65rem .75rem; min-height: 44px; max-width: 100%;
+}
+.resource-workflow button { cursor: pointer; justify-self: start; }
+.resource-workflow button:disabled { opacity: .55; cursor: not-allowed; }
+.resource-workflow button:hover:not(:disabled) { border-color: var(--accent); }
+.resource-workflow :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.resource-filter { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 1.25rem 0; }
+.resource-save { margin: .75rem 0; }
+.resource-error { color: var(--warn); margin: .75rem 0; }
+.archive-editor { margin: 1rem 0; }
+.archive-editor fieldset { border: 0; padding: 0; min-width: 0; display: grid; gap: .5rem; }
+.archive-editor legend { font-weight: bold; margin-bottom: .75rem; }
+.archive-editor textarea { resize: vertical; width: 100%; }
+.archive-editor label:not(:first-of-type) { margin-top: .5rem; }
