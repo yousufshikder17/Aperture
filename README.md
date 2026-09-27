@@ -67,6 +67,18 @@ calls them. The browser suite covers scanning states, match failures/retry/reloa
 mobile layout and accessibility against synthetic services—not live feed/provider or
 PostgreSQL acceptance. Browser captures are saved under ignored `exports/browser-check`.
 
+## Resource archive
+
+Save resources from `/resources`, then open **My resource archive** to edit notes
+and set Not started, In progress, or Completed. Changes are saved explicitly;
+failures retain your edits and offer retry. The directory shows existing saves,
+and duplicate saves resolve to the existing archive entry.
+
+The existing save allowance applies to new saves. Updating notes or progress on
+an existing entry does not spend that allowance. Completion records your progress;
+it does not automatically add skills to your resume or unlock prerequisites.
+No database migration is required. See [archive verification](docs/RESOURCE_ARCHIVE.md).
+
 ## Application tracker
 
 Every authenticated public account can log a catalog listing at `/applications`

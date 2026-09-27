@@ -12,6 +12,7 @@ import { DEFAULT_TEMPLATE, MasterResumeSchema, ReferenceListSchema, TemplateSche
 import { emptyResume } from "../src/app/builder/form-data.js";
 import { renderResumePdf } from "../../api/src/lib/pdf-export.js";
 import { applicationFixture, checkApplications } from "./applications.browser-flow.js";
+import { archiveFixture, checkArchive } from "./resource-archive.browser-flow.js";
 
 async function main() {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
@@ -70,6 +71,7 @@ async function main() {
   let scanConfigured = false, hasMatch = false, matchCalls = 0;
   const listingRequests: string[] = [];
   const trackerFixture = applicationFixture(listing);
+  const resourcesFixture = archiveFixture();
   const apiServer = createServer(async (req, res) => {
     const requestUrl = new URL(req.url ?? "/", providerOrigin || "http://127.0.0.1");
     const providerJson = (value: unknown, status = 200) =>
@@ -125,6 +127,9 @@ async function main() {
       return;
     }
     try {
+      if (requestUrl.pathname.startsWith("/v1/resources")) {
+        await resourcesFixture.handle(req, res); return;
+      }
       if (requestUrl.pathname.startsWith("/v1/applications")) {
         await trackerFixture.handle(req, res); return;
       }
@@ -375,6 +380,12 @@ async function main() {
       'document.querySelector("input[name=name]")?.value === "Synthetic Candidate"',
     );
     assert.equal(await evaluate('document.cookie.includes("aperture-session")'), false);
+    if (process.env.ARCHIVE_BROWSER_ONLY === "1") {
+      const captures = resolve("../../exports/browser-check");
+      mkdirSync(captures, { recursive: true });
+      await checkArchive({ browser, evaluate, waitFor, origin: webOrigin, captures, fixture: resourcesFixture });
+      return;
+    }
     if (process.env.TRACKER_BROWSER_ONLY === "1") {
       const captures = resolve("../../exports/browser-check");
       mkdirSync(captures, { recursive: true });
@@ -783,6 +794,7 @@ async function main() {
     console.log("PASS: public template search, warning, preview-before-save, persistence, mobile and accessibility.");
     listingStatus = 200;
     await checkApplications({ browser, evaluate, waitFor, origin: webOrigin, captures, listingId, fixture: trackerFixture });
+    await checkArchive({ browser, evaluate, waitFor, origin: webOrigin, captures, fixture: resourcesFixture });
     await browser("open", webOrigin + "/account");
     await waitFor('document.body.textContent.includes("Signed in as candidate@example.test")');
     await browser("find", "role", "button", "click", "--name", "Sign out of Aperture", "--exact");
