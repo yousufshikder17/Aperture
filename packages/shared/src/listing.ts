@@ -74,5 +74,7 @@ export const ManualListingCreateSchema = ManualListingDraftSchema.extend({
   description: z.string().trim().min(1).max(50_000),
 }).strict();
 export type ManualListingDraft = z.infer<typeof ManualListingDraftSchema>;
+export const PostingImportSchema = ManualListingDraftSchema.extend({
+  review: z.object({ method: z.enum(["text", "ai"]), warnings: z.array(z.string()) }),
+});
 export type ManualListingCreate = z.infer<typeof ManualListingCreateSchema>;
-

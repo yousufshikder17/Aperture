@@ -38,8 +38,9 @@ test("manual posting validation and upload review; invalid files never spend PDF
     quota: () => async (_c, next) => { quota++; await next(); },
   }));
   assert.equal((await app.request("/manual", { method: "POST" })).status, 401);
-  const upload = (name: string, content: BlobPart) => {
+  const upload = (name: string, content: BlobPart, method?: string) => {
     const body = new FormData(); body.set("file", new File([content], name));
+    if (method) body.set("method", method);
     return app.request("/import", { method: "POST", headers: { authorization: "owner" }, body });
   };
   const text = await upload("posting.txt", draft.description);
@@ -56,14 +57,35 @@ test("manual posting validation and upload review; invalid files never spend PDF
   for (let i = 0; i < 6; i++) pdf.addPage();
   assert.equal((await upload("posting.pdf", await pdf.save())).status, 400);
   assert.equal(quota, 0);
+  const localPdf = await PDFDocument.create();
+  localPdf.addPage().drawText("Build TypeScript services and reliable SQL pipelines for our engineering team.");
+  const readable = await upload("posting.pdf", await localPdf.save());
+  const readableDraft = await readable.json();
+  assert.equal(readable.status, 200);
+  assert.match(readableDraft.description, /TypeScript/);
+  assert.deepEqual(readableDraft.review, { method: "text", warnings: [] });
+  localPdf.addPage();
+  const mixed = await (await upload("posting.pdf", await localPdf.save())).json();
+  assert.match(mixed.review.warnings[0], /Page 2/);
+  const blank = await PDFDocument.create(); blank.addPage();
+  const blankDraft = await (await upload("posting.pdf", await blank.save())).json();
+  assert.equal(blankDraft.description, "");
+  assert.equal(blankDraft.review.warnings.length, 1);
+  assert.equal((await upload("posting.txt", "text", "ai")).status, 400);
+  assert.equal((await upload("posting.pdf", await blank.save(), "auto")).status, 400);
+  assert.equal((await upload("posting.pdf", "invalid", "ai")).status, 400);
+  assert.equal((await upload("posting.pdf", await pdf.save(), "ai")).status, 400);
+  assert.equal(quota, 0, "even empty or mixed PDFs never automatically spend AI quota");
   let extracted = false;
   const pdfApp = authenticated();
   pdfApp.route("/", createManualListingRoutes({
-    extract: async () => { assert.equal(quota, 1); extracted = true; return draft; },
+    extract: async (_file, format, method) => { assert.equal(quota, 1); assert.equal(format, "pdf");
+      assert.equal(method, "ai"); extracted = true; return { ...draft, review: { method, warnings: [] } }; },
     quota: () => async (_c, next) => { quota++; await next(); },
   }));
   const validPdf = await PDFDocument.create(); validPdf.addPage();
   const pdfBody = new FormData(); pdfBody.set("file", new File([await validPdf.save()], "posting.pdf"));
+  pdfBody.set("method", "ai");
   assert.equal((await pdfApp.request("/import", { method: "POST", headers: { authorization: "owner" }, body: pdfBody })).status, 200);
   assert.equal(extracted, true);
   const response = await app.request("/manual", { method: "POST", headers: { authorization: "owner", "content-type": "application/json" }, body: JSON.stringify(draft) });
