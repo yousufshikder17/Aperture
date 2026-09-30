@@ -11,6 +11,8 @@ test("manual posting exposes labeled native inputs, explicit saving and upload l
     assert.ok(html.includes(label));
   assert.match(html, /private to your account/);
   assert.match(html, /one match allowance/);
+  assert.match(html, /never switches to AI automatically/);
+  assert.match(html, /without AI or an allowance/);
   assert.match(html, /accept=".txt,.docx,.pdf"/);
   assert.match(html, /aria-describedby="posting-file-help"/);
 });

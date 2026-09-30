@@ -8,8 +8,13 @@ Matching retains its profile requirement and quota; tracker access remains avail
 to every authenticated public account. Hosted intelligence and tailoring stay absent.
 
 You can also import UTF-8 TXT, DOCX or PDF files up to 4 MiB. TXT and DOCX are
-extracted locally without AI. PDFs are limited to five pages and use the fast AI
-provider plus one match allowance; invalid/oversized PDFs are rejected before
+extracted locally without AI. PDFs are limited to five pages and default to local
+text extraction with no allowance. A per-page quality check flags fewer than 40
+non-whitespace characters or replacement glyphs, including blank pages in mixed
+documents. It cannot certify completeness or correct column reading order.
+For scanned or difficult PDFs, explicitly select **AI extraction** and import again.
+This uses the existing fast AI provider plus one match allowance. Quality warnings
+never automatically send a file to AI; invalid/oversized PDFs are rejected before
 quota reservation. Failed provider calls may still consume the reserved allowance.
 Import returns an unsaved draft: review it, choose **Use imported draft**, correct
 the fields, then save. Nothing is added to the master resume.
@@ -33,8 +38,10 @@ overwriting either user's content. No listing-discovery table or migration is ne
 in the public edition. Legacy manual rows without an owner are not exposed;
 an operator must verify ownership before assigning it.
 
-`POST /v1/listings/import` accepts multipart field `file` and returns the editable
-draft. It never persists an entry. Uploaded originals are not retained.
+`POST /v1/listings/import` accepts multipart field `file` and optional `method`
+(`text`, the default, or `ai` for PDFs only). It returns the editable draft with
+`review.method` and `review.warnings`. Empty text cannot replace the existing draft.
+It never persists an entry. Uploaded originals are not retained.
 
 ## Verification
 
@@ -45,5 +52,6 @@ same-URL isolation, unauthorized catalog/detail/match/ATS access and tracker che
 Run `MANUAL_POSTING_BROWSER_ONLY=1 npm run test:browser -w @aperture/web`
 for the focused browser flow: save failure/retry, import failure/review, explicit
 draft application, reload persistence, mobile overflow and accessibility.
-Browser services and AI outputs are synthetic. Real TXT/DOCX extraction is covered
-by API tests; live PDF transcription remains a deployment acceptance check.
+Browser services and AI outputs are synthetic. Real TXT/DOCX/PDF text extraction,
+blank and mixed-page warnings, and explicit AI quota routing are covered by API
+tests. Live AI PDF transcription remains a deployment acceptance check.

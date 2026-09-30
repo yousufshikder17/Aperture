@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import { ListingSchema, ManualListingCreateSchema, ManualListingDraftSchema, type ManualListingDraft } from "@aperture/shared";
+import { ListingSchema, ManualListingCreateSchema, ManualListingDraftSchema, PostingImportSchema, type ManualListingDraft } from "@aperture/shared";
 import { api, ApiError } from "../../lib/api";
 import { listingError } from "./listing-data";
 import { useUnsavedChanges } from "../builder/use-unsaved-changes";
@@ -18,7 +18,8 @@ export function postingError(error: unknown) {
 export function ManualPosting({ onSaved }: { onSaved: () => void }) {
   const [draft, setDraft] = useState(empty);
   const [file, setFile] = useState<File | null>(null);
-  const [imported, setImported] = useState<ManualListingDraft | null>(null);
+  const [imported, setImported] = useState<ReturnType<typeof PostingImportSchema.parse> | null>(null);
+  const [method, setMethod] = useState<"text" | "ai">("text");
   const [savedId, setSavedId] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -42,12 +43,13 @@ export function ManualPosting({ onSaved }: { onSaved: () => void }) {
     try {
       if (action === "import") {
         const form = new FormData(); form.set("file", file!);
-        const result = ManualListingDraftSchema.parse(await api("/listings/import", { method: "POST", body: form, signal: controller.signal }));
+        form.set("method", method);
+        const result = PostingImportSchema.parse(await api("/listings/import", { method: "POST", body: form, signal: controller.signal }));
         if (!controller.signal.aborted) { setImported(result); setStatus("Import ready. Review the text before using it."); }
       } else if (body.success) {
         const result = ListingSchema.parse(await api("/listings/manual", { method: "POST", body: JSON.stringify(body.data), signal: controller.signal }));
         if (!controller.signal.aborted) {
-          setSavedId(result.id); setDraft(empty); setImported(null); setFile(null);
+          setSavedId(result.id); setDraft(empty); setImported(null); setFile(null); setMethod("text");
           if (fileInput.current) fileInput.current.value = "";
           requestId.current = null; setStatus("Posting saved. Open it to score your resume or track an application."); onSaved();
         }
@@ -72,16 +74,27 @@ export function ManualPosting({ onSaved }: { onSaved: () => void }) {
         <p className="muted">The URL is saved as a link; it is not fetched.</p>
         <label>Description <span>(required)</span><textarea name="postingDescription" required rows={9} maxLength={50000} value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label>
         <div className="posting-import">
-          <label>Import description <input ref={fileInput} type="file" name="postingFile" accept=".txt,.docx,.pdf" aria-describedby="posting-file-help" onChange={e => { setFile(e.target.files?.[0] ?? null); setImported(null); }} /></label>
-          <p id="posting-file-help" className="muted">TXT, DOCX, or PDF up to 4 MiB. PDFs: maximum 5 pages, sent to the AI provider, using one match allowance. TXT and DOCX imports do not use AI.</p>
+          <label>Import description <input ref={fileInput} type="file" name="postingFile" accept=".txt,.docx,.pdf" aria-describedby="posting-file-help" onChange={e => { setFile(e.target.files?.[0] ?? null); setImported(null); setMethod("text"); }} /></label>
+          <p id="posting-file-help" className="muted">TXT, DOCX, or PDF up to 4 MiB. PDFs: maximum 5 pages. Text extraction runs on Aperture without AI or an allowance. AI extraction sends the PDF to the AI provider and uses one match allowance.</p>
+          {file?.name.toLowerCase().endsWith(".pdf") && <label>PDF extraction
+            <select name="postingMethod" value={method} onChange={e => setMethod(e.target.value as "text" | "ai")} aria-describedby="posting-method-help">
+              <option value="text">Text extraction (no AI)</option>
+              <option value="ai">AI extraction (scans or difficult PDFs)</option>
+            </select>
+          </label>}
+          <p id="posting-method-help" className="muted">Start with text extraction. A quality check flags pages with little readable text; it never switches to AI automatically. Review the result for missing text and reading order.</p>
           <button type="button" disabled={!file || !!busy} onClick={() => void run("import")}>{busy === "import" ? "Importing posting…" : "Import for review"}</button>
           {imported && <section aria-label="Imported posting review">
             <h3>Review imported text</h3>
+            <p>{imported.review.method === "ai" ? "Extracted with AI" : "Extracted without AI"}</p>
+            {imported.review.warnings.map(warning => <p key={warning} role="status">{warning}</p>)}
+            {imported.review.method === "text" && imported.review.warnings.length > 0 && file?.name.toLowerCase().endsWith(".pdf") &&
+              <p>Select <strong>AI extraction</strong> above, then choose <strong>Import for review</strong> to try again using one match allowance, or paste the description.</p>}
             {(imported.title || imported.company) && <p>{imported.title} · {imported.company}</p>}
             <label>Imported description<textarea readOnly rows={7} value={imported.description} /></label>
             <p>Using this draft replaces the description. You can correct all fields before saving.</p>
-            <button type="button" onClick={() => {
-              setDraft({ ...draft, ...Object.fromEntries(Object.entries(imported).filter(([, value]) => value)), description: imported.description });
+            <button type="button" disabled={!imported.description.trim()} onClick={() => {
+              setDraft({ ...draft, ...Object.fromEntries(Object.entries(ManualListingDraftSchema.parse(imported)).filter(([, value]) => value)), description: imported.description });
               setImported(null); setStatus("Draft updated. Check the details, then save the posting.");
             }}>Use imported draft</button>
             <button type="button" onClick={() => setImported(null)}>Discard import</button>
@@ -91,7 +104,7 @@ export function ManualPosting({ onSaved }: { onSaved: () => void }) {
           <button className="listing-primary" type="submit">{busy === "save" ? "Saving posting…" : "Save posting"}</button>
           <button type="button" onClick={() => {
             if (!window.confirm("Clear this unsaved posting?")) return;
-            setDraft(empty); setImported(null); setFile(null); setSavedId(""); setError(""); setStatus("");
+            setDraft(empty); setImported(null); setFile(null); setMethod("text"); setSavedId(""); setError(""); setStatus("");
             if (fileInput.current) fileInput.current.value = "";
             requestId.current = null;
           }}>Clear form</button>

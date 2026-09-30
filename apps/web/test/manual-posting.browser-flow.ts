@@ -5,13 +5,17 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { ManualListingCreateSchema, type Listing } from "@aperture/shared";
 
 export function manualPostingFixture() {
-  const fixture = { writeStatus: 200, importStatus: 200, writes: 0, rows: [] as Listing[],
+  const fixture = { writeStatus: 200, importStatus: 200, writes: 0, methods: [] as string[], rows: [] as Listing[],
     async handle(req: IncomingMessage, res: ServerResponse) {
       const path = new URL(req.url!, "http://localhost").pathname;
       const send = (body: unknown, status = 200) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
       if (path === "/v1/listings/import") {
-        for await (const _ of req) { /* drain upload */ }
-        send({ title: "", company: "", description: "Imported SQL and TypeScript requirements.", url: "", location: "", salary: "" }, fixture.importStatus);
+        const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk));
+        const form = await new Response(Buffer.concat(chunks), { headers: { "content-type": req.headers["content-type"]! } }).formData();
+        const method = String(form.get("method")); fixture.methods.push(method);
+        const empty = (form.get("file") as File).name.endsWith(".pdf") && method === "text";
+        send({ title: "", company: "", description: empty ? "" : "Imported SQL and TypeScript requirements.", url: "", location: "", salary: "",
+          review: { method, warnings: empty ? ["Page 1 has little readable text. Try AI extraction or paste the missing text."] : [] } }, fixture.importStatus);
         return true;
       }
       if (path !== "/v1/listings/manual") return false;
@@ -54,6 +58,18 @@ export async function checkManualPosting({ browser, evaluate, waitFor, origin, c
   await browser("find", "role", "button", "click", "--name", "Use imported draft", "--exact");
   assert.equal(await evaluate('document.querySelector("[name=postingDescription]").value'), "Imported SQL and TypeScript requirements.");
   assert.equal(await evaluate('document.querySelector("[name=postingTitle]").value'), "Manual platform engineer");
+  const pdfPath = join(captures, "posting.pdf"); writeFileSync(pdfPath, "synthetic scanned PDF");
+  await browser("upload", "[name=postingFile]", pdfPath);
+  assert.equal(await evaluate('document.querySelector("[name=postingMethod]").value'), "text");
+  await browser("find", "role", "button", "click", "--name", "Import for review", "--exact");
+  await waitFor('document.body.textContent.includes("Page 1 has little readable text")');
+  assert.equal(await evaluate('Array.from(document.querySelectorAll("button")).find(b => b.textContent === "Use imported draft").disabled'), true);
+  assert.ok(fixture.methods.every(method => method === "text"), "quality warnings must not trigger AI");
+  await browser("select", "[name=postingMethod]", "ai");
+  await browser("find", "role", "button", "click", "--name", "Import for review", "--exact");
+  await waitFor('document.body.textContent.includes("Extracted with AI")');
+  assert.equal(fixture.methods.at(-1), "ai");
+  await browser("find", "role", "button", "click", "--name", "Use imported draft", "--exact");
   for (const [width, height, label] of [["1440", "1000", "desktop"], ["390", "844", "mobile"]]) {
     await browser("set", "viewport", width!, height!); await evaluate("window.scrollTo(0,0)");
     assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true);
