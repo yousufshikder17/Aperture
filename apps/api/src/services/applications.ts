@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { applications, listings, db, type Db } from "@aperture/db";
 import type { ApplicationCreate, ApplicationPatch } from "@aperture/shared";
+import { loadAccessibleListing } from "./listing-storage.js";
 import { applicationChanges } from "../lib/application-changes.js";
 
 export function applicationStore(database: Db = db()) {
@@ -12,7 +13,7 @@ export function applicationStore(database: Db = db()) {
       return rows.map(row => ({ ...row.applications, listing: { title: row.listings.title, company: row.listings.company } }));
     },
     async create(userId: string, body: ApplicationCreate) {
-      const [listing] = await database.select().from(listings).where(eq(listings.id, body.listingId));
+      const listing = await loadAccessibleListing(body.listingId, userId, database);
       if (!listing) return null;
       const [row] = await database.insert(applications).values({ userId, ...body,
         ...applicationChanges({ status: "", appliedAt: null, events: [] }, body),

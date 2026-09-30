@@ -28,7 +28,7 @@ test("PostgreSQL tracker persistence scopes owners and preserves concurrent hist
     const owner = randomUUID(), other = randomUUID();
     await sql`INSERT INTO users VALUES (${owner}), (${other})`;
     const [listing] = await sql`INSERT INTO listings (source,url,title,company,description)
-      VALUES ('manual','https://example.test/job','Engineer','Example','Build services') RETURNING id`;
+      VALUES ('indeed_rss','https://example.test/job','Engineer','Example','Build services') RETURNING id`;
     assert.equal(await store.create(owner, { listingId: randomUUID(), status: "saved" }), null);
     const created = await store.create(owner, { listingId: listing!.id, status: "applied", notes: "Initial" });
     assert(created); assert(created.appliedAt);

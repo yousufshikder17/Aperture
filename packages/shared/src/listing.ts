@@ -52,3 +52,27 @@ export const MatchScoreSchema = z.object({
 });
 
 export type MatchScore = z.infer<typeof MatchScoreSchema>;
+
+const postingUrl = z.string().trim().max(2048).refine(value => {
+  if (!value) return true;
+  try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password; }
+  catch { return false; }
+}, "Use an http or https posting URL, or leave it blank.");
+
+export const ManualListingDraftSchema = z.object({
+  title: z.string().trim().max(200),
+  company: z.string().trim().max(200),
+  description: z.string().trim().max(50_000),
+  url: postingUrl,
+  location: z.string().trim().max(300),
+  salary: z.string().trim().max(200),
+});
+export const ManualListingCreateSchema = ManualListingDraftSchema.extend({
+  requestId: z.string().uuid(),
+  title: z.string().trim().min(1).max(200),
+  company: z.string().trim().min(1).max(200),
+  description: z.string().trim().min(1).max(50_000),
+}).strict();
+export type ManualListingDraft = z.infer<typeof ManualListingDraftSchema>;
+export type ManualListingCreate = z.infer<typeof ManualListingCreateSchema>;
+

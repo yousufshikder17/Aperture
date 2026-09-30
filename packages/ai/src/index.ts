@@ -30,3 +30,5 @@ export { simulateAts } from "./ats.js";
 export { scoreListing } from "./match-scorer.js";
 export { extractResumeFromPdf, extractResumeFromDocx } from "./resume-extract.js";
 export { assessComplexity } from "./complexity-batch.js";
+
+export { extractPosting } from "./posting-extract.js";
