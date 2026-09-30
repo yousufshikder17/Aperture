@@ -209,3 +209,15 @@ export const usageCounters = pgTable(
   },
   (t) => [uniqueIndex("usage_user_month_idx").on(t.userId, t.month)],
 );
+
+// Durable outbox: profile saves and their recalculation jobs commit together.
+export const backgroundJobs = pgTable("background_jobs", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull(),
+  payload: jsonb("payload").$type<Record<string, string>>().notNull().default({}),
+  attempts: integer("attempts").notNull().default(0),
+  availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [index("background_jobs_available_idx").on(t.availableAt)]);

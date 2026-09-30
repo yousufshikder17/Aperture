@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { eq, sql } from "drizzle-orm";
 import { db, profiles, resumeVersions } from "@aperture/db";
 import { DEFAULT_TEMPLATE, MasterResumeSchema, ReferenceListSchema } from "@aperture/shared";
-import { enqueueRecalc } from "../jobs/recalc.js";
+import { enqueueJob } from "../jobs/queue.js";
 import { renderResumePdf } from "../lib/pdf-export.js";
 
 export const profileRoutes = new Hono();
@@ -20,22 +20,25 @@ profileRoutes.put("/", zValidator("json", MasterResumeSchema), async (c) => {
   const user = c.get("user");
   const masterResume = c.req.valid("json");
 
-  const rows = await db()
-    .insert(profiles)
-    .values({ userId: user.id, masterResume, version: 1 })
-    .onConflictDoUpdate({
-      target: profiles.userId,
-      set: { masterResume, version: sql`${profiles.version} + 1`, updatedAt: new Date() },
-    })
-    .returning();
-  const saved = rows[0]!;
+  const saved = await db().transaction(async tx => {
+    const rows = await tx
+      .insert(profiles)
+      .values({ userId: user.id, masterResume, version: 1 })
+      .onConflictDoUpdate({
+        target: profiles.userId,
+        set: { masterResume, version: sql`${profiles.version} + 1`, updatedAt: new Date() },
+      })
+      .returning();
+    const saved = rows[0]!;
 
-  await db()
-    .insert(resumeVersions)
-    .values({ userId: user.id, version: saved.version, resume: masterResume })
-    .onConflictDoNothing();
+    await tx
+      .insert(resumeVersions)
+      .values({ userId: user.id, version: saved.version, resume: masterResume })
+      .onConflictDoNothing();
 
-  enqueueRecalc(user.id); // fire-and-forget
+    await enqueueJob(tx, `recalc:${user.id}:${saved.version}`, "recalc", { userId: user.id });
+    return saved;
+  });
   return c.json(saved);
 });
 
