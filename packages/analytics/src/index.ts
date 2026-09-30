@@ -4,13 +4,18 @@ import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
 // trajectories, cohort aggregates. Fed by ETL from Postgres (jobs/etl in the
 // API); Postgres stays pure OLTP.
 
-let _conn: DuckDBConnection | null = null;
+let _instance: Promise<DuckDBInstance> | null = null;
+let _conn: Promise<DuckDBConnection> | null = null;
+
+export async function analyticsConnection(): Promise<DuckDBConnection> {
+  _instance ??= DuckDBInstance.create(process.env.DUCKDB_PATH ?? "./analytics.duckdb");
+  const conn = await (await _instance).connect();
+  await migrate(conn);
+  return conn;
+}
 
 export async function analyticsDb(): Promise<DuckDBConnection> {
-  if (_conn) return _conn;
-  const instance = await DuckDBInstance.create(process.env.DUCKDB_PATH ?? "./analytics.duckdb");
-  _conn = await instance.connect();
-  await migrate(_conn);
+  _conn ??= analyticsConnection().catch(error => { _conn = null; _instance = null; throw error; });
   return _conn;
 }
 

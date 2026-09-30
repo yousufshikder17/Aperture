@@ -42,12 +42,14 @@ The worker runs inside that process, so DuckDB readers and the ETL writer share
 one DuckDB instance. Do not run multiple API processes against the same DuckDB file.
 ETL uses its own connection and transaction; readers keep the previous snapshot
 until a complete refresh commits. No separate Redis service or cron daemon is needed.
+Public matching and ATS recalculation remain deterministic; no hosted intelligence
+or tailoring pipeline is included. Manual feed scans remain administrator-only.
 
 The scheduler uses PostgreSQL time and checks once per minute:
 
 | Work | Schedule (UTC) |
 | --- | --- |
-| Ingest profile-targeted feeds | Hourly; a separate durable job per profile |
+| Ingest operator-configured feeds | Hourly; updates the shared catalog |
 | Refresh analytics | Hourly |
 | Sync resources | Daily, from 06:00 |
 | Prepare and deliver digests | Daily, from 08:00 |

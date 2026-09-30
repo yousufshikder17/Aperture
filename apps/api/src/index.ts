@@ -11,6 +11,7 @@ import { resourceRoutes } from "./routes/resources.js";
 import { analyticsRoutes } from "./routes/analytics.js";
 import { templateRoutes } from "./routes/templates.js";
 import { buildDigest } from "./jobs/digest.js";
+import { startBackgroundWorker } from "./jobs/worker.js";
 
 // Business and authorization logic lives in the Hono API.
 // The Next.js frontend is a thin client over these routes.
@@ -53,5 +54,11 @@ v1.get("/digest", async (c) => c.json(await buildDigest(c.get("user").id)));
 app.route("/v1", v1);
 
 const port = Number(process.env.API_PORT ?? 8787);
-serve({ fetch: app.fetch, port });
+const stopWorker = process.env.BACKGROUND_JOBS_ENABLED === "true" ? startBackgroundWorker() : undefined;
+const server = serve({ fetch: app.fetch, port });
+for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, () => {
+  stopWorker?.();
+  server.close(() => process.exit(0)); // Unfinished job transactions roll back on disconnect.
+  setTimeout(() => process.exit(0), 30_000).unref();
+});
 console.log(`aperture api listening on :${port}`);

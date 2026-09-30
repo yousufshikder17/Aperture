@@ -7,8 +7,9 @@ import {
   matches,
   profiles,
   users,
+  type Db,
 } from "@aperture/db";
-import { analyticsDb } from "@aperture/analytics";
+import { analyticsConnection } from "@aperture/analytics";
 import { listingSkillTerms, normalize, resumeText, hasKeyword } from "@aperture/ai";
 
 // Postgres → DuckDB ETL. Postgres stays pure OLTP; this job rebuilds the
@@ -37,29 +38,32 @@ function companyTier(): string {
   return "unknown"; // populated by startup intelligence (V2)
 }
 
-export async function runEtl(): Promise<{
+export async function runEtl(database: Db = db()): Promise<{
   applications: number;
   listingSkills: number;
   snapshots: number;
 }> {
-  const duck = await analyticsDb();
+  // A separate connection keeps API reads on the previous snapshot until commit.
+  const duck = await analyticsConnection();
+  await duck.run("BEGIN TRANSACTION");
+  try {
   await duck.run("DELETE FROM fact_applications");
   await duck.run("DELETE FROM fact_listing_skills");
   await duck.run("DELETE FROM fact_score_snapshots");
 
-  const allUsers = await db().select().from(users);
+  const allUsers = await database.select().from(users);
   let appCount = 0;
   let skillCount = 0;
   let snapCount = 0;
 
   for (const user of allUsers) {
-    const profileRows = await db().select().from(profiles).where(eq(profiles.userId, user.id));
+    const profileRows = await database.select().from(profiles).where(eq(profiles.userId, user.id));
     const profile = profileRows[0]?.masterResume ?? null;
     const targetRoles = profile?.targetRoles ?? [];
     const haystack = profile ? resumeText(profile) : "";
 
     // ---- fact_applications ----
-    const appRows = await db()
+    const appRows = await database
       .select()
       .from(applications)
       .innerJoin(listings, eq(listings.id, applications.listingId))
@@ -95,7 +99,7 @@ export async function runEtl(): Promise<{
 
     // ---- fact_listing_skills (drives gap analysis + market suggestions) ----
     if (profile) {
-      const matchRows = await db()
+      const matchRows = await database
         .select()
         .from(matches)
         .innerJoin(listings, eq(listings.id, matches.listingId))
@@ -123,7 +127,7 @@ export async function runEtl(): Promise<{
     }
 
     // ---- fact_score_snapshots ----
-    const snapshots = await db()
+    const snapshots = await database
       .select()
       .from(improvementHistory)
       .where(eq(improvementHistory.userId, user.id));
@@ -141,7 +145,12 @@ export async function runEtl(): Promise<{
     }
   }
 
+  await duck.run("COMMIT");
   return { applications: appCount, listingSkills: skillCount, snapshots: snapCount };
+  } catch (error) {
+    await duck.run("ROLLBACK");
+    throw error;
+  } finally { duck.closeSync(); }
 }
 
 // CLI entry (npm run etl). In production this runs on a schedule after ingest,
