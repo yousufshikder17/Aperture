@@ -4,6 +4,7 @@ import { ListingRowSchema, ListingRowsSchema, type ListingRow, type ListingRows 
 import { api } from "../../lib/api";
 import { listingError, safeListingUrl, scanSummary } from "./listing-data";
 import { MatchReport } from "./listing-report";
+import { ManualPosting } from "./manual-posting";
 
 function Recovery({ error }: { error: string }) {
   return error ? <div role="alert" className="listing-error"><p>{error}</p>
@@ -34,12 +35,13 @@ export function ListingsWorkflow() {
   return <div className="listing-workflow">
     <h1>Listings</h1>
     <p>Scan the operator-configured LinkedIn and Indeed RSS feeds, then open a listing to score your saved resume. Scanning the shared catalog requires an administrator.</p>
+    <ManualPosting onSaved={() => void load()} />
     <div className="listing-actions">
       <button className="listing-primary" disabled={!!busy} onClick={() => void load(true)}>{busy === "scan" ? "Scanning feeds…" : "Scan configured feeds (admin)"}</button>
       <button disabled={!!busy} onClick={() => void load()}>{busy === "load" ? "Loading listings…" : "Refresh listings"}</button>
     </div>
     <p role="status">{status}</p><Recovery error={error} />
-    {rows?.length === 0 && <p className="listing-section">No listings yet. Scan configured feeds to get started.</p>}
+    {rows?.length === 0 && <p className="listing-section">No listings yet. Add a job posting or ask an administrator to scan configured feeds.</p>}
     {!!rows?.length && <p className="muted">Showing the latest {rows.length} {rows.length === 1 ? "listing" : "listings"}, up to 100. Match scores reflect the saved version noted below, not unsaved edits.</p>}
     {rows?.map(({ listing, match, profileVersion }) => <article className="listing-section" key={listing.id}>
       <h2><a href={`/listings/${encodeURIComponent(listing.id)}`}>{listing.title}</a></h2>

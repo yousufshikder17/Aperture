@@ -47,6 +47,10 @@ Production must use `AUTH_MODE=oidc` with issuer, audience, JWKS URL, and allowe
 
 ## Public listing workflow
 
+Use **Add a job posting** to paste a description or import TXT/DOCX/PDF, review the
+draft, and save a posting visible only to your account. No feed or administrator
+is required for manual entry. See [manual postings](docs/MANUAL_POSTINGS.md).
+
 At `/listings`, refresh the latest 100 catalog entries or scan the operator-configured
 LinkedIn/Indeed RSS feeds. Scanning remains **administrator-only** because it updates
 the shared catalog. Missing configuration, partial feed failures and duplicate entries
@@ -66,6 +70,14 @@ check the absent private routes, and browser tests assert that the interface nev
 calls them. The browser suite covers scanning states, match failures/retry/reload,
 mobile layout and accessibility against synthetic services—not live feed/provider or
 PostgreSQL acceptance. Browser captures are saved under ignored `exports/browser-check`.
+
+## Background jobs
+
+Apply `packages/db/migrations/002_background_jobs.sql`, then set
+`BACKGROUND_JOBS_ENABLED=true` on the persistent API instance owning the DuckDB file.
+Profile saves and recalculation jobs commit atomically. The worker retries failures
+and schedules shared-feed ingestion, resource sync, transactional analytics refreshes
+and explicitly opted-in digest email. See [operations](docs/BACKGROUND_JOBS.md).
 
 ## Resource archive
 
@@ -113,9 +125,8 @@ reference failures preserve the draft and do not alter the saved resume.
 PDF/DOCX imports support extraction review, layout findings, explicit replacement,
 and editing before saving. Extraction uses the configured AI provider; accepting
 an import does not save automatically. Browser OIDC login is available at Account.
-The API's
-existing in-process recalculation queue and last-write-wins save behavior remain
-unchanged; avoid concurrently editing the same resume in multiple tabs.
+Recalculation jobs are durable and commit with the saved profile. Last-write-wins
+save behavior remains; avoid concurrently editing the same resume in multiple tabs.
 
 Run `npm test` and `npm run typecheck` from the repository root. The opt-in
 `npm run test:browser -w @aperture/web` requires Chrome and `agent-browser` on the

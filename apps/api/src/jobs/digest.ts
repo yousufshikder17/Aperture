@@ -1,5 +1,6 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import { db, listings, matches, type Db } from "@aperture/db";
+import { toListing } from "../services/listing-storage.js";
 import type { Job, JobTransaction } from "./queue.js";
 
 // Daily digest: the top listings worth applying to today — fresh listings
@@ -23,7 +24,7 @@ export async function buildDigest(userId: string, limit = 10, database: Db | Job
         id: r.listings.id,
         title: r.listings.title,
         company: r.listings.company,
-        url: r.listings.url,
+        url: toListing(r.listings).url,
       },
       score: r.matches.score.overall,
       verdict: r.matches.score.verdict,

@@ -18,3 +18,14 @@ body:has(.listing-workflow) > nav { flex-wrap: wrap; }
 .listing-workflow summary { cursor: pointer; padding: 0.6rem 0; min-height: 44px; }
 .listing-workflow pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 1rem; background: var(--panel); font-size: 0.85rem; }
 .listing-workflow strong { font-variant-numeric: tabular-nums; }
+.manual-posting { max-width: 72ch; }
+.manual-posting fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.manual-posting legend { font-weight: 600; padding: 1rem 0 0.5rem; }
+.manual-posting label { display: block; margin: 0.75rem 0; }
+.manual-posting label span { color: var(--muted); font-size: 0.9rem; }
+.manual-posting input, .manual-posting textarea { display: block; width: 100%; min-width: 0; min-height: 44px; box-sizing: border-box; margin-top: 0.4rem; padding: 0.65rem; border: 1px solid #596675; border-radius: 4px; background: var(--panel); color: var(--text); font: inherit; caret-color: var(--accent); }
+.manual-posting textarea { resize: vertical; }
+.posting-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
+.posting-import { border-top: 1px solid #2a323c; margin-top: 1.5rem; padding-top: 0.5rem; }
+.posting-import section button { margin: 0.75rem 0.75rem 0 0; }
+@media (max-width: 560px) { .posting-fields { grid-template-columns: minmax(0, 1fr); } }

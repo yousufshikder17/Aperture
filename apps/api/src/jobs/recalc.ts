@@ -2,7 +2,7 @@ import type { JobTransaction } from "./queue.js";
 import { and, eq } from "drizzle-orm";
 import { improvementHistory, listings, matches, profiles } from "@aperture/db";
 import { scoreListing, simulateAts } from "@aperture/ai";
-import type { Listing } from "@aperture/shared";
+import { toListing } from "../services/listing-storage.js";
 
 export async function recalcUser(userId: string, tx: JobTransaction) {
   const profileRows = await tx.select().from(profiles).where(eq(profiles.userId, userId));
@@ -22,17 +22,7 @@ export async function recalcUser(userId: string, tx: JobTransaction) {
   const matchScores: number[] = [];
   const atsScores: number[] = [];
   for (const row of existing) {
-    const listing: Listing = {
-      id: row.listings.id,
-      source: row.listings.source as Listing["source"],
-      url: row.listings.url,
-      title: row.listings.title,
-      company: row.listings.company,
-      location: row.listings.location,
-      salary: row.listings.salary,
-      description: row.listings.description,
-      postedAt: row.listings.postedAt?.toISOString() ?? null,
-    };
+    const listing = toListing(row.listings);
     const [score, ats] = await Promise.all([
       scoreListing(profile.masterResume, listing),
       simulateAts(profile.masterResume, listing),
