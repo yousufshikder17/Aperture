@@ -1,3 +1,4 @@
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 export const FEED_MAX_BYTES = 2 * 1024 * 1024;
 
 export async function readFeed(url: string, fetcher: typeof fetch = fetch): Promise<string> {
@@ -26,3 +27,14 @@ export async function readFeed(url: string, fetcher: typeof fetch = fetch): Prom
   } finally { reader.releaseLock(); }
   return Buffer.concat(chunks).toString("utf8");
 }
+
+const parser = new XMLParser({ ignoreAttributes: false, parseTagValue: false });
+
+export function parseFeed(text: string) {
+  if (XMLValidator.validate(text) !== true) throw new Error("invalid_feed");
+  const xml = parser.parse(text);
+  if (!xml?.rss?.channel || typeof xml.rss.channel !== "object") throw new Error("invalid_feed");
+  const items = xml.rss.channel.item ?? [];
+  return Array.isArray(items) ? items : [items];
+}
+
