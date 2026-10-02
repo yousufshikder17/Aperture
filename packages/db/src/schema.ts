@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   boolean,
   index,
   integer,
@@ -81,9 +83,39 @@ export const listings = pgTable(
     postedAt: timestamp("posted_at"),
     raw: jsonb("raw"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    availability: text("availability").$type<"open" | "closed" | "unknown">().notNull().default("unknown"),
+    lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+    lastChangedAt: timestamp("last_changed_at").notNull().defaultNow(),
+    closedAt: timestamp("closed_at"),
   },
-  (t) => [uniqueIndex("listings_url_idx").on(t.url)],
+  (t) => [uniqueIndex("listings_url_idx").on(t.url),
+    check("listings_availability_check", sql`${t.availability} IN ('open','closed','unknown')`),
+    check("listings_closed_at_check", sql`(${t.availability} = 'closed') = (${t.closedAt} IS NOT NULL)`)],
 );
+
+// Each external representation points at one stable canonical listing UUID.
+export const listingSources = pgTable("listing_sources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  listingId: uuid("listing_id").notNull().references(() => listings.id),
+  source: text("source").notNull(),
+  namespace: text("namespace").notNull(),
+  identityKey: text("identity_key").notNull(),
+  externalId: text("external_id"),
+  url: text("url").notNull(),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  availability: text("availability").$type<"open" | "closed" | "unknown">().notNull().default("unknown"),
+  snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull().default({}),
+  sourceUpdatedAt: timestamp("source_updated_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+}, t => [
+  uniqueIndex("listing_sources_identity_idx").on(t.source, t.namespace, t.identityKey),
+  uniqueIndex("listing_sources_primary_idx").on(t.listingId).where(sql`${t.isPrimary}`),
+  index("listing_sources_url_idx").on(t.url),
+  index("listing_sources_listing_idx").on(t.listingId),
+  check("listing_sources_availability_check", sql`${t.availability} IN ('open','closed','unknown')`),
+  check("listing_sources_not_manual_check", sql`${t.source} <> 'manual'`),
+]);
 
 export const matches = pgTable(
   "matches",

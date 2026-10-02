@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
@@ -107,6 +108,9 @@ test("private posting persistence, retry deduplication, same-URL isolation and d
         description text NOT NULL, posted_at timestamp, raw jsonb, created_at timestamp NOT NULL DEFAULT now());
       CREATE TABLE matches (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid REFERENCES users,
         listing_id uuid REFERENCES listings, profile_version integer, score jsonb, created_at timestamp DEFAULT now());`);
+    const migration = await sql.reserve();
+    try { await migration.unsafe(await readFile(new URL("../../../packages/db/migrations/003_listing_reconciliation.sql", import.meta.url), "utf8")); }
+    finally { migration.release(); }
     const owner = randomUUID(), other = randomUUID();
     await sql`INSERT INTO users VALUES (${owner}), (${other})`;
     const [first, retry] = await Promise.all([1, 2].map(() => createManualListing(owner, draft, database)));

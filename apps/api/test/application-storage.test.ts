@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
@@ -25,6 +26,9 @@ test("PostgreSQL tracker persistence scopes owners and preserves concurrent hist
         listing_id uuid NOT NULL REFERENCES listings, status application_status NOT NULL DEFAULT 'saved',
         applied_at timestamp, events jsonb NOT NULL DEFAULT '[]', notes text, created_at timestamp NOT NULL DEFAULT now());
     `);
+    const migration = await sql.reserve();
+    try { await migration.unsafe(await readFile(new URL("../../../packages/db/migrations/003_listing_reconciliation.sql", import.meta.url), "utf8")); }
+    finally { migration.release(); }
     const owner = randomUUID(), other = randomUUID();
     await sql`INSERT INTO users VALUES (${owner}), (${other})`;
     const [listing] = await sql`INSERT INTO listings (source,url,title,company,description)
