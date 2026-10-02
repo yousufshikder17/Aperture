@@ -1,4 +1,4 @@
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, ne } from "drizzle-orm";
 import { db, listings, matches, type Db } from "@aperture/db";
 import { toListing } from "../services/listing-storage.js";
 import type { Job, JobTransaction } from "./queue.js";
@@ -15,7 +15,7 @@ export async function buildDigest(userId: string, limit = 10, database: Db | Job
     .select()
     .from(matches)
     .innerJoin(listings, eq(listings.id, matches.listingId))
-    .where(and(eq(matches.userId, userId), gte(listings.createdAt, since)))
+    .where(and(eq(matches.userId, userId), gte(listings.createdAt, since), ne(listings.availability, "closed")))
     .orderBy(desc(matches.createdAt));
 
   return rows
