@@ -34,7 +34,7 @@ test("configuration and CSRF checks fail closed", () => {
   assert.equal(sameOrigin(new Request(env.WEB_APP_URL), env.WEB_APP_URL), false);
 });
 
-test("OIDC integration: discovery, PKCE exchange, signed identity, API acceptance and failure regressions", async () => {
+for (const trailingSlash of [true, false]) test(`OIDC integration: exact issuer with trailing slash=${trailingSlash}, PKCE and failure regressions`, async () => {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
   const jwk = { ...await exportJWK(publicKey), kid: "test", alg: "RS256", use: "sig" };
   let issuer = "", nonce = "", challenge = "", wrongNonce = false, rejectApi = false, exchanges = 0;
@@ -44,7 +44,8 @@ test("OIDC integration: discovery, PKCE exchange, signed identity, API acceptanc
       res.writeHead(status, { "Content-Type": "application/json" }).end(JSON.stringify(data));
     };
     if (req.url === "/.well-known/openid-configuration")
-      return send({ issuer, authorization_endpoint: issuer + "authorize", token_endpoint: issuer + "token", jwks_uri: issuer + "jwks" });
+      return send({ issuer, authorization_endpoint: issuer.replace(/\/$/, "") + "/authorize",
+        token_endpoint: issuer.replace(/\/$/, "") + "/token", jwks_uri: issuer.replace(/\/$/, "") + "/jwks" });
     if (req.url === "/jwks") return send({ keys: [jwk] });
     if (req.url === "/v1/auth/me") {
       assert.equal(req.headers.authorization, "Bearer synthetic-access");
@@ -69,9 +70,12 @@ test("OIDC integration: discovery, PKCE exchange, signed identity, API acceptanc
     send({}, 404);
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
-  issuer = "http://127.0.0.1:" + (server.address() as { port: number }).port + "/";
+  issuer = "http://127.0.0.1:" + (server.address() as { port: number }).port + (trailingSlash ? "/" : "");
   try {
     const config = authConfig({ ...env, WEB_OIDC_ISSUER: issuer, API_BASE_URL: issuer });
+    assert.equal(config.issuer, issuer);
+    const mismatched = authConfig({ ...env, WEB_OIDC_ISSUER: trailingSlash ? issuer.slice(0, -1) : issuer + "/" });
+    await assert.rejects(beginLogin(mismatched), /Issuer mismatch/);
     const login = await beginLogin(config);
     const location = new URL(login.location);
     nonce = location.searchParams.get("nonce")!;

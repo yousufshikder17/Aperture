@@ -13,7 +13,9 @@ export function authConfig(env: Env = process.env) {
     return parsed;
   }
   const origin = url(env.WEB_APP_URL).origin;
-  const issuer = url(env.WEB_OIDC_ISSUER).href;
+  url(env.WEB_OIDC_ISSUER);
+  // OIDC issuer identifiers must match exactly, including any trailing slash.
+  const issuer = env.WEB_OIDC_ISSUER!;
   const clientId = env.WEB_OIDC_CLIENT_ID;
   if (!clientId || !/^[a-fA-F0-9]{64}$/.test(env.WEB_SESSION_SECRET ?? ""))
     throw new Error("Configure OIDC client and a random 32-byte hex session secret");
