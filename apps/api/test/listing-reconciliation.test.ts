@@ -13,7 +13,6 @@ import { createManualListing } from "../src/services/listing-storage.js";
 import { buildDigest } from "../src/jobs/digest.js";
 import { scanFeeds } from "../src/services/aggregator.js";
 import { rssSourceConfig } from "../src/services/rss-source.js";
-import { scanFeeds } from "../src/services/aggregator.js";
 import { loadListingRows } from "../src/services/listing-storage.js";
 
 const enabled = { skip: !process.env.TEST_DATABASE_URL };
