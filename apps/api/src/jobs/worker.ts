@@ -12,7 +12,7 @@ export async function handleJob(job: Job, tx: JobTransaction) {
   switch (job.kind) {
     case "recalc": return recalcUser(job.payload.userId!, tx);
     case "ingest": {
-      const result = await scanFeeds();
+      const result = await scanFeeds({ context: { runId: job.id } });
       if (result.failedSources.length) throw new Error("FeedUnavailable");
       return;
     }

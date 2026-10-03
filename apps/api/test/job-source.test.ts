@@ -9,6 +9,57 @@ import { readFeed } from "../src/services/feed-reader.js";
 const feed = { source: "linkedin_rss" as const, url: "https://example.test/feed" };
 const xml = '<rss><channel><item><guid isPermaLink="false">00012</guid><title>Engineer at Example</title><link>https://example.test/jobs/12?q=1</link></item></channel></rss>';
 const source = rssSourceConfig(feed);
+
+test("provider-agnostic execution accepts normalized results without RSS-specific configuration", async () => {
+  const { scanSources } = await import("../src/services/aggregator.js");
+  const rssResult = await adapter(async () => new Response(xml)).fetch(source);
+  const received: unknown[] = [];
+  let executions = 0;
+  const config = { provider: "fixture", sourceId: "fixture:board", source: "career_page" as const,
+    enabled: true, config: { board: "example" } };
+  const result = await scanSources([config, { ...config, enabled: false }], {
+    provider: "fixture",
+    async fetch(input) {
+      executions++;
+      assert.equal(input.config.board, "example");
+      return { ...rssResult, provider: "fixture", sourceId: input.sourceId, source: input.source,
+        jobs: rssResult.jobs.map(job => ({ ...job, source: input.source, namespace: input.sourceId })) };
+    },
+  }, { reconcile: async jobs => { received.push(...jobs); return [{ listingId: "canonical", outcome: "created", changed: false, stale: false }]; },
+    context: { log: () => {} } });
+  assert.equal(executions, 1);
+  assert.equal(result.configured, 1);
+  assert.equal(result.inserted, 1);
+  assert.equal(NormalizedJobSchema.parse(received[0]).namespace, "fixture:board");
+});
+
+test("scans preserve API summary shape, report bad configuration, and propagate persistence failures", async () => {
+  const { scanFeeds } = await import("../src/services/aggregator.js");
+  const empty = await scanFeeds({ feeds: [feed], fetch: async () => new Response('<rss><channel/></rss>'),
+    reconcile: async () => { throw new Error("empty feed must not write"); }, context: { log: () => {} } });
+  assert.deepEqual(empty, { configured: 1, scanned: 0, inserted: 0, succeeded: 1, failedSources: [] });
+  const failed = await scanFeeds({ feeds: [{ ...feed, url: "invalid" }], context: { log: () => {} } });
+  assert.deepEqual(failed, { configured: 1, scanned: 0, inserted: 0, succeeded: 0, failedSources: [feed.source] });
+  await assert.rejects(scanFeeds({ feeds: [feed], fetch: async () => new Response(xml),
+    reconcile: async () => { throw new Error("database failure"); }, context: { log: () => {} } }), /database failure/);
+});
+
+test("a source failure does not prevent other RSS feeds from reaching reconciliation", async () => {
+  const { scanFeeds } = await import("../src/services/aggregator.js");
+  const events: { status: string }[] = [];
+  const result = await scanFeeds({ feeds: [feed, { source: "indeed_rss", url: "https://example.test/down" }],
+    fetch: async url => {
+      if (String(url).endsWith("down")) throw new Error("network");
+      return new Response(xml);
+    }, reconcile: async jobs => {
+      assert.equal(jobs[0]?.namespace, source.sourceId);
+      return [{ listingId: "canonical", outcome: "unchanged", changed: false, stale: false }];
+    }, context: { log: event => events.push(event) } });
+  assert.equal(result.scanned, 1);
+  assert.equal(result.succeeded, 1);
+  assert.deepEqual(result.failedSources, ["indeed_rss"]);
+  assert.deepEqual(events.map(event => event.status), ["success", "failure"]);
+});
 function adapter(fetcher: typeof fetch) { return new RssJobSourceAdapter((url, context) => readFeed(url, fetcher, context)); }
 
 test("RSS adapter preserves stable feed identity and validates its normalized output", async () => {

@@ -1,36 +1,51 @@
 import type { ListingSource } from "@aperture/shared";
-import { readFeed, parseFeed } from "./feed-reader.js";
-import { normalizeRssItem, type FeedConfig } from "./rss-source.js";
-import { reconcileListings } from "./listing-reconciliation.js";
+import { readFeed } from "./feed-reader.js";
+import { reconcileListings, type ReconciliationResult } from "./listing-reconciliation.js";
+import { RssJobSourceAdapter, rssSourceConfig, type FeedConfig } from "./rss-source.js";
+import { configuredSources } from "./source-config.js";
+import type { JobSourceAdapter, JobSourceConfig, JobSourceContext } from "./job-source.js";
+import type { NormalizedJob } from "./normalized-job.js";
 export type { FeedConfig } from "./rss-source.js";
+export { configuredFeeds } from "./source-config.js";
 
-// Operator-configured feeds; scanning does not invent personalized feed URLs.
-function configuredFeeds(): FeedConfig[] { return [
-  { source: "linkedin_rss", url: process.env.LINKEDIN_RSS_URL ?? "" },
-  { source: "indeed_rss", url: process.env.INDEED_RSS_URL ?? "" },
-]; }
-
+export async function scanSources<TConfig>(
+  sources: JobSourceConfig<TConfig>[], adapter: JobSourceAdapter<TConfig>,
+  options: {
+    reconcile: (jobs: NormalizedJob[]) => Promise<ReconciliationResult[]>;
+    context?: JobSourceContext;
+  },
+) {
+  let scanned = 0, inserted = 0, succeeded = 0;
+  const failedSources: ListingSource[] = [];
+  const enabled = sources.filter(source => source.enabled);
+  const context: JobSourceContext = {
+    log: event => console.info("job_source_fetch", event),
+    ...options.context,
+  };
+  for (const source of enabled) {
+    const result = await adapter.fetch(source, context);
+    if (result.status === "failure") { failedSources.push(source.source); continue; }
+    scanned += result.jobs.length;
+    if (result.jobs.length) {
+      const reconciled = await options.reconcile(result.jobs);
+      inserted += reconciled.filter(row => row.outcome === "created").length;
+    }
+    // Partial feeds retain the existing behavior: valid records are ingested, invalid ones skipped.
+    // They never authorize absence-based closure (nor do successful RSS results).
+    succeeded++;
+  }
+  return { scanned, inserted, configured: enabled.length, succeeded, failedSources };
+}
 
 export async function scanFeeds(options: {
   feeds?: FeedConfig[];
   fetch?: typeof fetch;
   reconcile?: typeof reconcileListings;
+  context?: JobSourceContext;
 } = {}) {
-  let scanned = 0, inserted = 0, succeeded = 0;
-  const failedSources: ListingSource[] = [];
-  const feeds = (options.feeds ?? configuredFeeds()).filter(feed => feed.url.trim());
-  for (const feed of feeds) {
-    const observedAt = new Date();
-    let items: unknown[];
-    try { items = parseFeed(await readFeed(feed.url, options.fetch)); }
-    catch { failedSources.push(feed.source); continue; }
-    const rows = items.map(item => normalizeRssItem(item, feed, observedAt)).filter(row => row !== null);
-    scanned += rows.length;
-    if (rows.length) {
-      const results = await (options.reconcile ?? reconcileListings)(rows);
-      inserted += results.filter(result => result.outcome === "created").length;
-    }
-    succeeded++;
-  }
-  return { scanned, inserted, configured: feeds.length, succeeded, failedSources };
+  const sources = options.feeds?.map(rssSourceConfig) ?? configuredSources();
+  return scanSources(sources, new RssJobSourceAdapter((url, context) => readFeed(url, options.fetch, context)), {
+    reconcile: options.reconcile ?? reconcileListings,
+    context: options.context,
+  });
 }
