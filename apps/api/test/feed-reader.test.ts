@@ -20,11 +20,11 @@ test("oversized feed is a partial scan failure and the next request retries succ
   const good = '<rss><channel><item><title>Engineer</title><link>https://example.test/job</link></item></channel></rss>';
   let fail = true;
   const options = {
-    feeds: [{ source: "manual" as const, url: "https://example.test/one" }, { source: "manual" as const, url: "https://example.test/two" }],
+    feeds: [{ source: "linkedin_rss" as const, url: "https://example.test/one" }, { source: "linkedin_rss" as const, url: "https://example.test/two" }],
     fetch: (async (url) => new Response(fail && String(url).endsWith("one") ? "x".repeat(FEED_MAX_BYTES + 1) : good)) as typeof fetch,
-    insert: async () => 1,
+    reconcile: async () => [{ listingId: "test", outcome: "created" as const, changed: false, stale: false }],
   };
-  assert.deepEqual(await scanFeeds(options), { configured: 2, succeeded: 1, scanned: 1, inserted: 1, failedSources: ["manual"] });
+  assert.deepEqual(await scanFeeds(options), { configured: 2, succeeded: 1, scanned: 1, inserted: 1, failedSources: ["linkedin_rss"] });
   fail = false;
   assert.equal((await scanFeeds(options)).succeeded, 2);
 });

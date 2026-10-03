@@ -13,25 +13,25 @@ test("RSS normalization handles singleton items, invalid dates, unsafe links and
       assert(init?.signal);
       if (String(url).endsWith("bad")) throw new Error("private network detail");
       return new Response('<rss><channel><item><title>Engineer at Example</title><link>https://example.test/job</link><pubDate>bad</pubDate></item></channel></rss>');
-    }, insert: async values => { rows.push(...values); return 1; },
+    }, reconcile: async values => { rows.push(...values); return [{ listingId: "test", outcome: "created", changed: false, stale: false }]; },
   });
   assert.deepEqual(result, { scanned: 1, inserted: 1, configured: 2, succeeded: 1, failedSources: ["indeed_rss"] });
   assert.equal((rows[0] as { postedAt: unknown }).postedAt, null);
-  const unsafe = await scanFeeds({ feeds: [{ source: "manual", url: "https://example.test" }],
+  const unsafe = await scanFeeds({ feeds: [{ source: "linkedin_rss", url: "https://example.test" }],
     fetch: async () => new Response('<rss><channel><item><title>Bad</title><link>javascript:alert(1)</link></item></channel></rss>'),
-    insert: async () => { throw new Error("unsafe row reached persistence"); },
+    reconcile: async () => { throw new Error("unsafe row reached persistence"); },
   });
   assert.equal(unsafe.scanned, 0);
 });
 test("invalid XML and HTTP failures are failures, while repeated valid rows may insert zero", async () => {
   for (const response of [new Response("unavailable", { status: 503 }), new Response("<rss>"), new Response("<html>wrong feed</html>")]) {
-    const result = await scanFeeds({ feeds: [{ source: "manual", url: "https://example.test" }], fetch: async () => response });
+    const result = await scanFeeds({ feeds: [{ source: "linkedin_rss", url: "https://example.test" }], fetch: async () => response });
     assert.equal(result.succeeded, 0);
-    assert.deepEqual(result.failedSources, ["manual"]);
+    assert.deepEqual(result.failedSources, ["linkedin_rss"]);
   }
-  const result = await scanFeeds({ feeds: [{ source: "manual", url: "https://example.test" }],
+  const result = await scanFeeds({ feeds: [{ source: "linkedin_rss", url: "https://example.test" }],
     fetch: async () => new Response('<rss><channel><title>Jobs</title><item><title>Engineer</title><link>https://example.test/job</link></item></channel></rss>'),
-    insert: async () => 0 });
+    reconcile: async () => [{ listingId: "known", outcome: "unchanged", changed: false, stale: false }] });
   assert.equal(result.scanned, 1);
   assert.equal(result.inserted, 0);
   assert.equal(result.succeeded, 1);

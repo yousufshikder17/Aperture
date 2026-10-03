@@ -11,6 +11,8 @@ import type { NormalizedJob } from "../src/services/normalized-job.js";
 import { applicationStore } from "../src/services/applications.js";
 import { createManualListing } from "../src/services/listing-storage.js";
 import { buildDigest } from "../src/jobs/digest.js";
+import { scanFeeds } from "../src/services/aggregator.js";
+import { loadListingRows } from "../src/services/listing-storage.js";
 
 const enabled = { skip: !process.env.TEST_DATABASE_URL };
 const at = new Date("2026-10-01T12:00:00Z");
@@ -19,6 +21,39 @@ function job(patch: Partial<NormalizedJob> = {}): NormalizedJob {
     title: "Engineer", company: "Example", description: "Build TypeScript services", location: null,
     salary: null, postedAt: null, sourceUpdatedAt: null, observedAt: at, availability: "unknown", raw: null, ...patch };
 }
+
+test("public RSS reconciles legacy rows, preserves catalog visibility, and never closes absent jobs", enabled, async () => fixture(async (db, sql, owner) => {
+  const [legacy] = await sql`INSERT INTO listings (source,url,title,company,description,created_at)
+    VALUES ('linkedin_rss','https://example.test/legacy','Engineer','Example','Legacy description','2000-01-01') RETURNING id`;
+  const [manual] = await sql`INSERT INTO listings (source,url,title,company,description)
+    VALUES ('manual','manual:legacy','Private','Example','Private content') RETURNING id`;
+  const migration = await sql.reserve();
+  try {
+    const content = await readFile(new URL("../../../packages/db/migrations/003_listing_reconciliation.sql", import.meta.url), "utf8");
+    await migration.unsafe(content); await migration.unsafe(content);
+  } finally { migration.release(); }
+  assert.equal((await sql`SELECT * FROM listing_sources WHERE listing_id = ${legacy!.id}`).length, 1);
+  assert.equal((await sql`SELECT * FROM listing_sources WHERE listing_id = ${manual!.id}`).length, 0);
+  const scan = (description: string, link = 'https://example.test/legacy') => scanFeeds({
+    feeds: [{ source: 'linkedin_rss', url: 'https://example.test/feed' }],
+    fetch: async () => new Response(`<rss><channel><item><guid>opaque-id</guid><title>Engineer at Example</title><link>${link}</link><description>${description}</description></item></channel></rss>`),
+    reconcile: rows => reconcileListings(rows, db),
+  });
+  assert.equal((await scan('Updated')).inserted, 0);
+  assert.equal((await scan('Updated again','https://example.test/moved')).inserted, 0);
+  const [source] = await sql`SELECT * FROM listing_sources WHERE listing_id = ${legacy!.id}`;
+  assert.equal(source!.external_id, 'opaque-id'); assert.notEqual(source!.namespace, 'legacy');
+  const [row] = await sql`SELECT * FROM listings WHERE id = ${legacy!.id}`;
+  assert.equal(row!.description, 'Updated again'); assert.equal(row!.url, 'https://example.test/moved');
+  const rows = await loadListingRows(owner, undefined, db);
+  assert.equal(rows.length, 1); assert.equal(rows[0]!.listing.id, legacy!.id);
+  assert.equal((await loadListingRows(randomUUID(), undefined, db)).length, 1, 'shared catalog does not require private discoveries');
+  await scanFeeds({ feeds: [{ source: 'linkedin_rss', url: 'https://example.test/feed' }],
+    fetch: async () => new Response('<rss><channel><title>Empty window</title></channel></rss>'),
+    reconcile: () => { throw Error('RSS absence must not cause reconciliation'); },
+  });
+  assert.equal((await sql`SELECT availability FROM listings WHERE id = ${legacy!.id}`)[0]!.availability, 'unknown');
+}));
 async function fixture(run: (database: ReturnType<typeof drizzle<typeof schema>>, connection: ReturnType<typeof postgres>, owner: string) => Promise<void>) {
   const admin = postgres(process.env.TEST_DATABASE_URL!, { max: 1, onnotice() {} });
   const namespace = "reconcile_" + randomUUID().replaceAll("-", "");
