@@ -52,7 +52,14 @@ export async function responseRates(userId: string) {
      ORDER BY applications DESC`,
     [userId],
   );
-  return reader.getRowObjects();
+  return reader.getRowObjects().map(row => {
+    const applications = Number(row.applications);
+    const responses = Number(row.responses);
+    if (!Number.isSafeInteger(applications) || !Number.isSafeInteger(responses))
+      throw new Error("Application counts exceed JSON integer precision");
+    return { role_type: row.role_type, market: row.market, company_tier: row.company_tier,
+      applications, responses, response_rate_pct: Number(row.response_rate_pct) };
+  });
 }
 /**
  * Skill-gap frequency across all scanned listings for a user — powers
@@ -98,7 +105,7 @@ export async function scoreTrajectory(userId: string) {
      ORDER BY snapshot_at`,
     [userId],
   );
-  return reader.getRowObjects();
+  return reader.getRowObjectsJson();
 }
 
 // All public analytical queries are scoped to a verified user ID by their callers.
