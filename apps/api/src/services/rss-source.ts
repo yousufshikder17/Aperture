@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import type { ListingSource } from "@aperture/shared";
 import { NormalizedJobSchema } from "./normalized-job.js";
+import type { JobSourceAdapter, JobSourceConfig, JobSourceContext, JobSourceError, JobSourceFetchResult } from "./job-source.js";
+import { FeedReadError, parseFeed, validateFeedUrl } from "./feed-reader.js";
 
 export interface FeedConfig { source: ListingSource; url: string }
 
@@ -14,7 +16,7 @@ export function normalizeRssItem(value: unknown, feed: FeedConfig, observedAt: D
     ? (item.guid as Record<string, unknown>)["#text"] : item.guid;
   const result = NormalizedJobSchema.safeParse({
     source: feed.source,
-    namespace: "rss:" + createHash("sha256").update(feed.url.trim()).digest("hex"),
+    namespace: rssNamespace(feed.url),
     externalId: typeof guid === "string" && guid.trim() ? guid.trim() : null,
     url: item.link,
     title: name?.[1]?.trim() ?? item.title,
@@ -26,4 +28,60 @@ export function normalizeRssItem(value: unknown, feed: FeedConfig, observedAt: D
     availability: "unknown", location: null, salary: null, raw: item,
   });
   return result.success ? result.data : null;
+}
+
+export interface RssConfig { url: string }
+export type RssSourceConfig = JobSourceConfig<RssConfig> & { provider: "rss" };
+export function rssNamespace(url: string) {
+  return "rss:" + createHash("sha256").update(url.trim()).digest("hex");
+}
+export function rssSourceConfig(feed: FeedConfig): RssSourceConfig {
+  return { provider: "rss", sourceId: rssNamespace(feed.url), source: feed.source as RssSourceConfig["source"],
+    enabled: !!feed.url.trim(), config: { url: feed.url } };
+}
+type RssReader = (url: string, context?: JobSourceContext) => Promise<string>;
+export class RssJobSourceAdapter implements JobSourceAdapter<RssConfig> {
+  readonly provider = "rss";
+  constructor(private readonly read: RssReader) {}
+  async fetch(source: JobSourceConfig<RssConfig>, context: JobSourceContext = {}): Promise<JobSourceFetchResult> {
+    const clock = context.now ?? (() => new Date());
+    const fetchedAt = clock();
+    const metadata = { provider: this.provider, sourceId: source.sourceId, source: source.source,
+      fetchedAt, snapshotComplete: false, recordsReceived: 0, durationMs: 0 };
+    let result: JobSourceFetchResult;
+    try {
+      if (source.provider !== this.provider || !source.enabled ||
+          !source.config || typeof source.config.url !== "string" ||
+          !NormalizedJobSchema.shape.source.safeParse(source.source).success)
+        throw new FeedReadError("configuration", "invalid_source_config", false);
+      validateFeedUrl(source.config.url);
+      if (source.sourceId !== rssNamespace(source.config.url))
+        throw new FeedReadError("configuration", "invalid_source_identity", false);
+      if (context.timeoutMs !== undefined && (!Number.isInteger(context.timeoutMs) ||
+          context.timeoutMs <= 0 || context.timeoutMs > 2_147_483_647))
+        throw new FeedReadError("configuration", "invalid_timeout", false);
+      context.signal?.throwIfAborted();
+      const items = parseFeed(await this.read(source.config.url, context));
+      metadata.recordsReceived = items.length;
+      const jobs = items.map(item => normalizeRssItem(item, { source: source.source, url: source.config.url }, fetchedAt))
+        .filter(job => job !== null);
+      const rejected = items.length - jobs.length;
+      result = { ...metadata, status: rejected ? "partial" : "success", jobs,
+        warnings: rejected ? [{ code: "invalid_record", count: rejected }] : [] };
+    } catch (error) {
+      const failure: JobSourceError = error instanceof FeedReadError
+        ? { kind: error.kind, code: error.code, retryable: error.retryable }
+        : { kind: "source", code: context.signal?.aborted ? "aborted" :
+            error instanceof Error && error.name === "TimeoutError" ? "timeout" : "network_error",
+            retryable: !context.signal?.aborted };
+      result = { ...metadata, status: "failure", jobs: [], warnings: [], error: failure };
+    }
+    result.durationMs = Math.max(0, clock().getTime() - fetchedAt.getTime());
+    // Observability must not turn successful retrieval into an ingestion failure.
+    try { context.log?.({ provider: result.provider, sourceId: result.sourceId, source: result.source,
+      runId: context.runId, status: result.status, recordsReceived: result.recordsReceived,
+      normalized: result.jobs.length, warnings: result.warnings.reduce((sum, warning) => sum + warning.count, 0),
+      durationMs: result.durationMs, errorKind: result.error?.kind, errorCode: result.error?.code }); } catch {}
+    return result;
+  }
 }
