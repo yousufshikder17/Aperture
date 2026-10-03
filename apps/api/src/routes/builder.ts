@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { desc, eq } from "drizzle-orm";
 import { db, improvementHistory, resumeVersions } from "@aperture/db";
 import { extractResumeFromDocx, extractResumeFromPdf } from "@aperture/ai";
@@ -39,7 +40,10 @@ export function createBuilderRoutes(dependencies: BuilderRouteDependencies = {})
     db().select().from(improvementHistory).where(eq(improvementHistory.userId, userId)));
   const docxMime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-  builderRoutes.post("/upload", async (c) => {
+  builderRoutes.post("/upload", bodyLimit({
+    maxSize: uploadLimit + MAX_MULTIPART_OVERHEAD_BYTES,
+    onError: c => c.json({ error: "payload_too_large", maxBytes: uploadLimit }, 413),
+  }), async (c) => {
     const declaredLength = Number(c.req.header("content-length"));
     if (Number.isFinite(declaredLength) && declaredLength > uploadLimit + MAX_MULTIPART_OVERHEAD_BYTES) {
       return c.json({ error: "payload_too_large", maxBytes: uploadLimit }, 413);
