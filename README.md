@@ -73,6 +73,12 @@ PostgreSQL acceptance. Browser captures are saved under ignored `exports/browser
 
 ## Background jobs
 
+RSS imports now use a normalized source model and canonical reconciliation. Apply
+`packages/db/migrations/003_listing_reconciliation.sql` when upgrading an existing
+database. Source IDs and exact URLs preserve listing references while refreshing
+content; RSS absence never implies closure. See [reconciliation rules and migration
+details](docs/LISTING_RECONCILIATION.md).
+
 Apply `packages/db/migrations/002_background_jobs.sql`, then set
 `BACKGROUND_JOBS_ENABLED=true` on the persistent API instance owning the DuckDB file.
 Profile saves and recalculation jobs commit atomically. The worker retries failures

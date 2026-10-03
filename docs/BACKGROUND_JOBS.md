@@ -1,5 +1,10 @@
 # Background jobs
 
+Listing ingestion also requires migration `003_listing_reconciliation.sql`. Shared
+RSS scans use the canonical reconciler; committed feed batches are safe to retry,
+and failed batches roll back listing/source changes. No personal discovery table is
+introduced. See [listing reconciliation](LISTING_RECONCILIATION.md).
+
 Apply `packages/db/migrations/002_background_jobs.sql` before deploying the API,
 or use `npm run db:push` for a new database. Profile content, version history and
 the recalculation job commit in one PostgreSQL transaction. A failed enqueue fails
