@@ -12,9 +12,52 @@ import { applicationStore } from "../src/services/applications.js";
 import { createManualListing } from "../src/services/listing-storage.js";
 import { buildDigest } from "../src/jobs/digest.js";
 import { scanFeeds } from "../src/services/aggregator.js";
+import { rssSourceConfig } from "../src/services/rss-source.js";
+import { scanFeeds } from "../src/services/aggregator.js";
 import { loadListingRows } from "../src/services/listing-storage.js";
 
 const enabled = { skip: !process.env.TEST_DATABASE_URL };
+
+test("RSS adapter pipeline is idempotent and preserves canonical IDs and tracked applications", enabled, async () => fixture(async (db, sql, owner) => {
+  const feed = { source: "linkedin_rss" as const, url: "https://example.test/adapter-feed" };
+  const payload = (description: string) => '<rss><channel><item><guid>stable-guid</guid><title>Engineer at Example</title>' +
+    '<link>https://example.test/adapter-job</link><description>' + description + '</description></item></channel></rss>';
+  let text = payload("Original requirements");
+  let observedAt = at;
+  const scan = () => scanFeeds({ feeds: [feed], fetch: async () => new Response(text),
+    context: { now: () => observedAt, log: () => {} },
+    reconcile: jobs => reconcileListings(jobs, db) });
+  assert.equal((await scan()).inserted, 1);
+  const [canonical] = await db.select().from(schema.listings);
+  const store = applicationStore(db);
+  const application = await store.create(owner, { listingId: canonical!.id, status: "interviewing", notes: "Keep interview notes" });
+  assert(application);
+  assert.equal((await scan()).inserted, 0);
+  observedAt = new Date(at.getTime() + 1000);
+  text = payload("Updated requirements");
+  assert.equal((await scan()).inserted, 0);
+  const [updated] = await db.select().from(schema.listings);
+  assert.equal(updated!.id, canonical!.id);
+  assert.equal(updated!.description, "Updated requirements");
+  assert.equal((await sql`SELECT * FROM listing_sources`).length, 1);
+  const [identity] = await sql`SELECT * FROM listing_sources`;
+  assert.equal(identity!.external_id, "stable-guid");
+  assert.equal(identity!.namespace, rssSourceConfig(feed).sourceId);
+
+  const [tracked] = await store.list(owner);
+  assert.equal(tracked!.id, application.id);
+  assert.equal(tracked!.listingId, canonical!.id);
+  assert.equal(tracked!.status, application.status);
+  assert.equal(tracked!.notes, application.notes);
+  assert.deepEqual(tracked!.events, application.events);
+  assert.equal(tracked!.appliedAt?.toISOString(), application.appliedAt?.toISOString());
+  text = '<rss><channel/></rss>';
+  assert.equal((await scan()).succeeded, 1);
+  assert.equal((await sql`SELECT availability FROM listings`)[0]!.availability, "unknown");
+  text = '<rss>';
+  assert.equal((await scan()).succeeded, 0);
+  assert.equal((await sql`SELECT * FROM listings`).length, 1);
+}));
 const at = new Date("2026-10-01T12:00:00Z");
 function job(patch: Partial<NormalizedJob> = {}): NormalizedJob {
   return { source: "linkedin_rss", namespace: "test-board", externalId: "job-1", url: "https://example.test/job-1",

@@ -43,13 +43,13 @@ interface FetchMetadata {
   fetchedAt: Date;
   durationMs: number;
   recordsReceived: number;
-  // True only for an authoritative, fully consumed snapshot, never merely a successful request.
-  snapshotComplete: boolean;
 }
 export type JobSourceFetchResult = FetchMetadata & (
-  | { status: "success" | "partial"; jobs: NormalizedJob[];
-      warnings: { code: "invalid_record"; count: number }[]; error?: never }
-  | { status: "failure"; jobs: []; warnings: []; error: JobSourceError }
+  // True only for an authoritative, fully consumed snapshot, never merely a successful request.
+  | { status: "success"; snapshotComplete: boolean; jobs: NormalizedJob[]; warnings: []; error?: never }
+  | { status: "partial"; snapshotComplete: false; jobs: NormalizedJob[];
+      warnings: { code: string; count: number }[]; error?: never }
+  | { status: "failure"; snapshotComplete: false; jobs: []; warnings: []; error: JobSourceError }
 );
 export interface JobSourceAdapter<TConfig> {
   readonly provider: JobSourceProvider;

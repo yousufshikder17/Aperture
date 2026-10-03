@@ -13,6 +13,7 @@ const source = rssSourceConfig(feed);
 test("provider-agnostic execution accepts normalized results without RSS-specific configuration", async () => {
   const { scanSources } = await import("../src/services/aggregator.js");
   const rssResult = await adapter(async () => new Response(xml)).fetch(source);
+  assert(rssResult.status !== "failure");
   const received: unknown[] = [];
   let executions = 0;
   const config = { provider: "fixture", sourceId: "fixture:board", source: "career_page" as const,

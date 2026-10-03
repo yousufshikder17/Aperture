@@ -15,13 +15,14 @@ export function validateFeedUrl(value: string) {
   } catch { throw new FeedReadError("configuration", "invalid_feed_url", false); }
 }
 export function parseFeed(text: string): unknown[] {
-  if (XMLValidator.validate(text) !== true) throw new FeedReadError("payload", "invalid_feed", false);
-  const channel = parser.parse(text)?.rss?.channel;
-  if (channel === "") return [];
-  if (!channel || typeof channel !== "object" || Array.isArray(channel))
-    throw new FeedReadError("payload", "invalid_feed", false);
-  const items = channel.item ?? [];
-  return Array.isArray(items) ? items : [items];
+  try {
+    if (XMLValidator.validate(text) !== true) throw new Error();
+    const channel = parser.parse(text)?.rss?.channel;
+    if (channel === "") return [];
+    if (!channel || typeof channel !== "object" || Array.isArray(channel)) throw new Error();
+    const items = channel.item ?? [];
+    return Array.isArray(items) ? items : [items];
+  } catch { throw new FeedReadError("payload", "invalid_feed", false); }
 }
 export async function fetchFeedText(url: string, fetcher: typeof fetch = fetch,
   context: Pick<JobSourceContext, "signal" | "timeoutMs"> = {}): Promise<string> {

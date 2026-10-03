@@ -47,7 +47,7 @@ export class RssJobSourceAdapter implements JobSourceAdapter<RssConfig> {
     const clock = context.now ?? (() => new Date());
     const fetchedAt = clock();
     const metadata = { provider: this.provider, sourceId: source.sourceId, source: source.source,
-      fetchedAt, snapshotComplete: false, recordsReceived: 0, durationMs: 0 };
+      fetchedAt, snapshotComplete: false as const, recordsReceived: 0, durationMs: 0 };
     let result: JobSourceFetchResult;
     try {
       if (source.provider !== this.provider || !source.enabled ||
@@ -66,8 +66,9 @@ export class RssJobSourceAdapter implements JobSourceAdapter<RssConfig> {
       const jobs = items.map(item => normalizeRssItem(item, { source: source.source, url: source.config.url }, fetchedAt))
         .filter(job => job !== null);
       const rejected = items.length - jobs.length;
-      result = { ...metadata, status: rejected ? "partial" : "success", jobs,
-        warnings: rejected ? [{ code: "invalid_record", count: rejected }] : [] };
+      result = rejected
+        ? { ...metadata, status: "partial", jobs, warnings: [{ code: "invalid_record", count: rejected }] }
+        : { ...metadata, status: "success", jobs, warnings: [] };
     } catch (error) {
       const failure: JobSourceError = error instanceof FeedReadError
         ? { kind: error.kind, code: error.code, retryable: error.retryable }
