@@ -1,17 +1,12 @@
 import { PDFDocument, StandardFonts, rgb, type PDFPage, type PDFFont } from "pdf-lib";
 import { DEFAULT_TEMPLATE, type MasterResume, type ResumeSection, type ResumeTemplate } from "@aperture/shared";
+import { pdfTextLayout } from "./pdf-text.js";
 
 const WIDTH = 612; // US Letter
 const HEIGHT = 792;
 
 function color(hex: string) {
   return rgb(...([1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255) as [number, number, number]));
-}
-
-// Standard PDF fonts use WinAnsi. Replace common punctuation and omit unsupported glyphs.
-function pdfText(value: string) {
-  return value.replace(/[–—]/g, "-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
-    .replace(/\u2022/g, "-").replace(/[^\x20-\x7e\xa0-\xff]/g, "");
 }
 
 export async function renderResumePdf(
@@ -24,6 +19,7 @@ export async function renderResumePdf(
     : family === "Courier" ? StandardFonts.Courier : StandardFonts.Helvetica);
   const bold = await doc.embedFont(family === "TimesRoman" ? StandardFonts.TimesRomanBold
     : family === "Courier" ? StandardFonts.CourierBold : StandardFonts.HelveticaBold);
+  const textLayout = await pdfTextLayout(doc, regular, bold, JSON.stringify(resume));
   const margin = template.spacing.margin;
   const bodySize = template.type.bodySize;
   const textColor = color(template.color.text);
@@ -39,18 +35,19 @@ export async function renderResumePdf(
   const wrap = (value: string, size: number, font: PDFFont, width: number) => {
     const lines: string[] = [];
     let line = "";
-    for (let word of pdfText(value).split(/\s+/)) {
+    for (let word of value.normalize("NFC").split(/\s+/)) {
       if (!word) continue;
-      while (font.widthOfTextAtSize(word, size) > width) {
+      while (textLayout.width(word, size, font) > width) {
         if (line) { lines.push(line); line = ""; }
+        const characters = Array.from(word);
         let cut = 1;
-        while (cut < word.length && font.widthOfTextAtSize(word.slice(0, cut + 1), size) <= width) cut++;
-        lines.push(word.slice(0, cut));
-        word = word.slice(cut);
+        while (cut < characters.length && textLayout.width(characters.slice(0, cut + 1).join(""), size, font) <= width) cut++;
+        lines.push(characters.slice(0, cut).join(""));
+        word = characters.slice(cut).join("");
       }
       if (!word) continue;
       const next = line ? `${line} ${word}` : word;
-      if (font.widthOfTextAtSize(next, size) > width && line) {
+      if (textLayout.width(next, size, font) > width && line) {
         lines.push(line);
         line = word;
       } else line = next;
@@ -64,7 +61,7 @@ export async function renderResumePdf(
         cursor.page++;
         cursor.y = HEIGHT - margin;
       }
-      pageAt(cursor.page).drawText(line, { x: cursor.x, y: cursor.y, size, font, color: ink });
+      textLayout.draw(pageAt(cursor.page), line, { x: cursor.x, y: cursor.y, size, font, color: ink });
       cursor.y -= size + gap;
     }
   };
