@@ -44,6 +44,9 @@ function contentBlocks(parts: ContentPart[]) {
 }
 
 export class ClaudeProvider implements AIProvider {
+  async supportsImages(tier: ModelTier): Promise<boolean> {
+    return /^claude-(?:3[.-]|(?:haiku|sonnet|opus)-4)/.test(MODELS[tier]);
+  }
   readonly name = "claude";
   private client: Anthropic;
 

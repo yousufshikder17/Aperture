@@ -25,13 +25,15 @@ export async function api<T>(path: string, init?: RequestInit, base?: string): P
     throw new UpgradeRequiredError(await res.json());
   }
   if (!res.ok) {
-    throw new ApiError(res.status);
+    const detail = await res.json().catch(() => null);
+    const code = typeof detail?.error === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(detail.error) ? detail.error : undefined;
+    throw new ApiError(res.status, code);
   }
   return res.json() as Promise<T>;
 }
 
 export class ApiError extends Error {
-  constructor(public status: number) {
+  constructor(public status: number, public code?: string) {
     super(`API request failed (${status})`);
   }
 }

@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { importBody, IMPORT_LIMIT, parseExtraction } from "../src/app/builder/import-data.js";
+import { importBody, IMPORT_LIMIT, parseExtraction, importError } from "../src/app/builder/import-data.js";
 import { emptyResume } from "../src/app/builder/form-data.js";
+import { ApiError } from "../src/lib/api.js";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import ResumeImport from "../src/app/builder/resume-import.js";
 
 test("import accepts PDF and DOCX, normalizes missing MIME, and rejects unsafe or oversized selections", () => {
   for (const name of ["resume.pdf", "RESUME.DOCX"]) {
     const result = importBody(new File(["synthetic"], name));
     assert.ok((result.get("file") as File).type.startsWith("application/"));
+    assert.equal(result.get("mode"), "deterministic");
   }
   for (const file of [new File([], "empty.pdf"), new File(["x"], "resume.exe"),
     new File(["x"], "resume.pdf", { type: "text/html" }),
@@ -19,4 +24,28 @@ test("untrusted extraction must include a complete resume and valid layout findi
   assert.throws(() => parseExtraction({ resume: {}, layoutFindings: [] }));
   assert.throws(() => parseExtraction({ ...value, layoutFindings: [{ issue: "x", atsRisk: "unknown", fix: "x" }] }));
   assert.deepEqual(emptyResume().basics.name, "");
+});
+test("import carries an explicit policy and validates method/provenance and raw evidence", () => {
+  for (const mode of ["deterministic", "auto", "ai-assisted"] as const)
+    assert.equal(importBody(new File(["fixture"], "resume.pdf"), mode).get("mode"), mode);
+  const value = { resume: emptyResume(), layoutFindings: [], import: {
+    method: "pdf-text", aiUsed: false, rawText: "List<T>", warnings: ["Visual layout not inspected"] } };
+  assert.deepEqual(parseExtraction(value), value);
+  assert.throws(() => parseExtraction({ ...value, import: { ...value.import, method: "guessed" } }));
+});
+test("import explains no-AI and text-only model recovery without exposing provider diagnostics", () => {
+  assert.match(importError(new ApiError(422, "resume_text_unusable")), /text-based PDF\/DOCX/);
+  assert.match(importError(new ApiError(422, "vision_required")), /text-only Ollama/);
+  assert.match(importError(new ApiError(503, "ai_unavailable")), /local Ollama/);
+  assert.match(importError(new ApiError(503, "ai_import_failed")), /retry deterministic/);
+  assert.doesNotMatch(importError(new Error("secret document/provider data")), /secret/);
+});
+test("default import UI offers no-AI extraction and review without calling accept/save", () => {
+  let accepted = 0;
+  const html = renderToStaticMarkup(React.createElement(ResumeImport, { disabled: false, onAccept: () => { accepted++; } }));
+  assert.match(html, /Deterministic import reads text without AI/);
+  assert.match(html, /value="deterministic" selected/);
+  assert.match(html, /Auto — AI fallback if needed/);
+  assert.match(html, /importing never saves automatically/);
+  assert.equal(accepted, 0);
 });

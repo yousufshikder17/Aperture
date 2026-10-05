@@ -30,6 +30,9 @@ function parts(content: ContentPart[]) {
 }
 
 export class GeminiProvider implements AIProvider {
+  async supportsImages(tier: ModelTier): Promise<boolean> {
+    return /^gemini-(?:2\.[05]|3(?:\.\d+)?)-(?:flash|pro)/.test(MODELS[tier]);
+  }
   readonly name = "gemini";
   private client: GoogleGenAI;
 

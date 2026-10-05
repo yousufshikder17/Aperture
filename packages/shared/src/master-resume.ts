@@ -82,3 +82,16 @@ export const ResumeExtractionSchema = z.object({
 });
 
 export type ResumeExtraction = z.infer<typeof ResumeExtractionSchema>;
+
+export const ResumeImportModeSchema = z.enum(["deterministic", "auto", "ai-assisted"]);
+export type ResumeImportMode = z.infer<typeof ResumeImportModeSchema>;
+export const ResumeImportCapabilitiesSchema = z.object({
+  aiAvailable: z.boolean(), visionAvailable: z.boolean(),
+});
+export const ResumeImportResultSchema = ResumeExtractionSchema.extend({
+  import: z.object({
+    method: z.enum(["docx-text", "pdf-text", "ai-text", "ai-vision"]),
+    aiUsed: z.boolean(), rawText: z.string().max(200_000).nullable(), warnings: z.array(z.string()),
+  }).optional(),
+});
+export type ResumeImportResult = z.infer<typeof ResumeImportResultSchema>;

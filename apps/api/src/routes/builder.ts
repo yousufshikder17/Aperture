@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { desc, eq } from "drizzle-orm";
 import { db, improvementHistory, resumeVersions } from "@aperture/db";
-import { extractResumeFromDocx, extractResumeFromPdf } from "@aperture/ai";
+import { extractResumeFromDocx, extractResumeFromPdf, resumeImportCapabilities, ResumeImportError } from "@aperture/ai";
 import { loadSkillGaps } from "../services/gap-analysis.js";
-import { MarketSuggestionSchema, VersionSummarySchema } from "@aperture/shared";
+import { MarketSuggestionSchema, VersionSummarySchema, ResumeImportModeSchema } from "@aperture/shared";
 
 export const DEFAULT_MAX_RESUME_UPLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_MULTIPART_OVERHEAD_BYTES = 64 * 1024;
@@ -22,6 +22,7 @@ export function maxResumeUploadBytes(env: Record<string, string | undefined> = p
 export interface BuilderRouteDependencies {
   extractPdf?: typeof extractResumeFromPdf;
   extractDocx?: typeof extractResumeFromDocx;
+  importCapabilities?: typeof resumeImportCapabilities;
   env?: Record<string, string | undefined>;
   loadGaps?: typeof loadSkillGaps;
   loadVersions?: (userId: string) => Promise<Array<typeof resumeVersions.$inferSelect>>;
@@ -40,6 +41,8 @@ export function createBuilderRoutes(dependencies: BuilderRouteDependencies = {})
     db().select().from(improvementHistory).where(eq(improvementHistory.userId, userId)));
   const docxMime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+  builderRoutes.get("/import-capabilities", async c => c.json(await (dependencies.importCapabilities ?? resumeImportCapabilities)()));
+
   builderRoutes.post("/upload", bodyLimit({
     maxSize: uploadLimit + MAX_MULTIPART_OVERHEAD_BYTES,
     onError: c => c.json({ error: "payload_too_large", maxBytes: uploadLimit }, 413),
@@ -53,10 +56,18 @@ export function createBuilderRoutes(dependencies: BuilderRouteDependencies = {})
     if (!(file instanceof File)) return c.json({ error: "expected multipart field 'file'" }, 400);
     if (file.size > uploadLimit) return c.json({ error: "payload_too_large", maxBytes: uploadLimit }, 413);
 
+    const mode = ResumeImportModeSchema.safeParse(body["mode"] ?? "deterministic");
+    if (!mode.success) return c.json({ error: "invalid_import_mode" }, 400);
     const buffer = Buffer.from(await file.arrayBuffer());
-    if (file.type === "application/pdf") return c.json(await extractPdf(buffer));
-    if (file.type === docxMime || file.name.toLowerCase().endsWith(".docx")) {
-      return c.json(await extractDocx(buffer));
+    try {
+      if (file.type === "application/pdf") return c.json(await extractPdf(buffer, { mode: mode.data }));
+      if (file.type === docxMime || file.name.toLowerCase().endsWith(".docx")) {
+        return c.json(await extractDocx(buffer, { mode: mode.data }));
+      }
+    } catch (error) {
+      if (!(error instanceof ResumeImportError)) throw error;
+      const status = error.code === "resume_import_limit" ? 413 : error.code === "ai_unavailable" || error.code === "ai_import_failed" ? 503 : 422;
+      return c.json({ error: error.code, message: error.message }, status);
     }
     return c.json({ error: "expected a PDF or DOCX" }, 400);
   });

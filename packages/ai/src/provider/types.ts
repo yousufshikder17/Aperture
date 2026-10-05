@@ -46,6 +46,7 @@ export interface BatchItem<T> {
 }
 
 export interface AIProvider {
+  supportsImages?(tier: ModelTier): Promise<boolean>;
   readonly name: string;
   /** Human-readable "provider:model" label for a tier — stored with reports for provenance. */
   modelLabel(tier: ModelTier): string;

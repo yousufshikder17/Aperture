@@ -1,0 +1,34 @@
+Alex Morgan
+alex@example.test | +1 416-555-0123
+Location: Toronto, Canada
+Headline: Software Engineer
+https://example.test/alex
+
+Profile
+Software engineer building reliable services. Code examples include List<T> and C++.
+
+Work Experience
+Software Engineer at Example Labs
+Jan 2022 - Present
+- Built a TypeScript service handling 1000 daily requests.
+- Added automated tests for Python integrations.
+Example Systems
+Developer
+Jun 2020 - Dec 2021
+- Maintained an internal Java tool.
+
+Education
+Example University | Bachelor of Science in Computer Science
+2016 - 2020
+
+Projects
+Resume Reader | https://example.test/reader
+A deterministic parser for document text.
+- Preserved literal List<T> code examples.
+
+Technical Skills
+Languages: TypeScript, Python, C++, Java
+Tools: Git, Docker
+
+Certifications
+Example Certificate

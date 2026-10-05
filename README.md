@@ -129,7 +129,7 @@ outside this public edition, so the builder has no coaching control. References
 have their own editor and save action;
 reference failures preserve the draft and do not alter the saved resume.
 PDF/DOCX imports support extraction review, layout findings, explicit replacement,
-and editing before saving. Extraction uses the configured AI provider; accepting
+and editing before saving. Extraction defaults to deterministic text parsing; optional AI uses FAST_PROVIDER. See [import modes](docs/RESUME_IMPORT.md). Accepting
 an import does not save automatically. Browser OIDC login is available at Account.
 Recalculation jobs are durable and commit with the saved profile. Last-write-wins
 save behavior remains; avoid concurrently editing the same resume in multiple tabs.

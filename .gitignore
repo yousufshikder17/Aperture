@@ -10,3 +10,6 @@ next-env.d.ts
 *.duckdb.wal
 uploads/
 exports/
+
+# Isolated synthetic browser-test build cache
+.next-browser-test/

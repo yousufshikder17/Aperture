@@ -59,6 +59,7 @@ async function main() {
   let referenceStatus = 200;
   let marketStatus = 200;
   const uploadedTypes: string[] = [];
+  const uploadedModes: string[] = [];
   let masterPdfStatus = 200;
   let masterPdfCalls = 0;
   let selectedTemplate: ResumeTemplate = DEFAULT_TEMPLATE;
@@ -154,16 +155,19 @@ async function main() {
         send([{ skill: "Rust", role_type: "Engineer", listings_requiring: 3, listings_total: 4, frequency_pct: 75 }], marketStatus);
         return;
       }
+      if (req.url === "/v1/builder/import-capabilities") { send({ aiAvailable:true, visionAvailable:false }); return; }
       if (req.url === "/v1/builder/upload") {
         const chunks: Buffer[] = [];
         for await (const chunk of req) chunks.push(Buffer.from(chunk));
         const form = await new Request(webOrigin, { method: "POST",
           headers: { "content-type": req.headers["content-type"]! }, body: Buffer.concat(chunks) }).formData();
-        uploadedTypes.push((form.get("file") as File).type);
+        const file = form.get("file") as File;
+        uploadedTypes.push(file.type);
+        const mode = String(form.get("mode")); uploadedModes.push(mode);
         const resume = emptyResume();
         resume.basics.name = "Imported Candidate";
         resume.basics.email = "imported@example.test";
-        send({ resume, layoutFindings: [{ issue: "Two columns", atsRisk: "high", fix: "Use one column" }] }, uploadStatus);
+        send({ resume, layoutFindings: [], import: { mode, method:mode === "ai-assisted" ? "ai-text" : file.type === "application/pdf" ? "pdf-text" : "docx-text", aiUsed:mode === "ai-assisted", warnings:[], rawText:"Imported Candidate\nUse List<T>\n<script>literal evidence</script>" } }, uploadStatus);
         return;
       }
       if (req.url?.startsWith("/v1/templates/library")) {
@@ -327,6 +331,7 @@ async function main() {
         windowsHide: true,
         env: {
           ...process.env,
+          BROWSER_TEST_DIST_DIR: ".next-browser-test",
           NEXT_PUBLIC_API_BASE_URL: `http://127.0.0.1:${address.port}`,
           NEXT_PUBLIC_AUTH_DEV_TOKEN: "synthetic-builder-test",
           AUTH_DEV_WEB_TOKEN: "synthetic-builder-test",
@@ -561,11 +566,19 @@ async function main() {
     assert.equal(await evaluate('document.querySelector("input[name=name]").value'), "Updated Candidate");
     uploadStatus = 200;
     const beforeImport = writes;
+    assert.equal(await evaluate('document.querySelector("select[name=resumeImportMode]").value'),"deterministic");
     await browser("find", "role", "button", "click", "--name", "Extract for review", "--exact");
     await waitFor('document.body.textContent.includes("Review extracted draft")');
     assert.equal(writes, beforeImport);
     assert.equal(profile.masterResume.basics.name, "Updated Candidate");
+    assert.equal(uploadedModes.at(-1),"deterministic");
+    assert.equal(await evaluate('document.body.textContent.includes("AI was not used")'),true);
+    await browser("find","role","button","click","--name","Retry with AI","--exact");
+    await waitFor('document.body.textContent.includes("AI was used")');
+    assert.equal(uploadedModes.at(-1),"ai-assisted"); assert.equal(writes,beforeImport);
+    assert.equal(await evaluate('document.querySelector(".builder-suggestion script")'),null);
     await browser("find", "role", "button", "click", "--name", "Discard import", "--exact");
+    await browser("select", "select[name=resumeImportMode]", "deterministic");
     await selectImport("resume.docx");
     await browser("find", "role", "button", "click", "--name", "Extract for review", "--exact");
     await waitFor('document.body.textContent.includes("Review extracted draft")');
@@ -578,6 +591,8 @@ async function main() {
     await waitFor('document.querySelector("input[name=name]")?.value === "Imported Candidate"');
     assert.equal(writes, beforeImport);
     assert.equal(profile.masterResume.basics.name, "Updated Candidate");
+    assert.equal(await evaluate('document.body.textContent.includes("Imported source text")'),true);
+    assert.equal(await evaluate('document.querySelector(".resume-builder script")'),null);
     assert.equal(await evaluate('document.querySelector(".builder-form button[type=submit]").disabled'), false);
     await browser("fill", field("name"), "Reviewed Candidate");
     saveStatus = 503;

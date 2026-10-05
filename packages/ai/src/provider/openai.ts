@@ -34,6 +34,9 @@ function userParts(content: ContentPart[]) {
 }
 
 export class OpenAIProvider implements AIProvider {
+  async supportsImages(tier: ModelTier): Promise<boolean> {
+    return /^gpt-4(?:o(?:-mini)?|\.1(?:-mini|-nano)?)(?:-\d{4}-\d{2}-\d{2})?$/.test(MODELS[tier]);
+  }
   readonly name = "openai";
   private client: OpenAI;
 

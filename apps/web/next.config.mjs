@@ -2,6 +2,7 @@ import "../../scripts/load-root-env.cjs";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.BROWSER_TEST_DIST_DIR ?? ".next",
   transpilePackages: ["@aperture/shared"],
   webpack(config) {
     // Shared packages use NodeNext .js specifiers over TypeScript source.

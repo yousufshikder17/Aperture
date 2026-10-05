@@ -28,7 +28,7 @@ export {
 // Public pipelines. Advanced hosted analysis is intentionally not implemented here.
 export { simulateAts } from "./ats.js";
 export { scoreListing } from "./match-scorer.js";
-export { extractResumeFromPdf, extractResumeFromDocx } from "./resume-extract.js";
+export { extractResumeFromPdf, extractResumeFromDocx, resumeImportCapabilities, ResumeImportError } from "./resume-extract.js";
 export { assessComplexity } from "./complexity-batch.js";
 
 export { extractPosting } from "./posting-extract.js";

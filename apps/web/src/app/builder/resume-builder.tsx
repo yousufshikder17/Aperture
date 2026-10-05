@@ -71,7 +71,7 @@ function ResumeForm({
   resume: MasterResume;
   version: number;
   onSaved: (version: number, resume: MasterResume) => void;
-  onImport: (resume: MasterResume) => void;
+  onImport: (resume: MasterResume, rawText?: string | null) => void;
   imported?: boolean;
 }) {
   const [dirty, setDirty] = useState(imported);
@@ -529,6 +529,7 @@ function ResumeForm({
 export default function ResumeBuilder() {
   const [draftKey, setDraftKey] = useState(0);
   const [imported, setImported] = useState(false);
+  const [importEvidence, setImportEvidence] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -602,7 +603,8 @@ export default function ResumeBuilder() {
           <ResumeForm
             key={draftKey}
             imported={imported}
-            onImport={(masterResume) => {
+            onImport={(masterResume, rawText) => {
+              setImportEvidence(rawText ?? null);
               setProfile(current => current ? { ...current, masterResume } : current);
               setImported(true);
               setDraftKey(key => key + 1);
@@ -612,6 +614,7 @@ export default function ResumeBuilder() {
             version={profile.masterResume ? profile.version : 0}
             onSaved={(version, masterResume) => {
               setImported(false);
+              setImportEvidence(null);
               setProfile((current) =>
                 current ? { ...current, version, masterResume } : current,
               );
@@ -621,6 +624,7 @@ export default function ResumeBuilder() {
         )
       )}
       {!loading && !error && profile && <>
+        {importEvidence && <details className="builder-section"><summary>Imported source text — compare while editing</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{importEvidence}</pre></details>}
         <ReferencesEditor />
         <BuilderInsights key={profile.version} />
       </>}

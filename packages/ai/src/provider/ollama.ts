@@ -56,6 +56,17 @@ function toMessages(request: StructuredRequest<unknown>): OllamaMessage[] {
 }
 
 export class OllamaProvider implements AIProvider {
+  async supportsImages(tier: ModelTier): Promise<boolean> {
+    try {
+      const response = await fetch(`${BASE_URL}/api/show`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: models()[tier] }), signal: AbortSignal.timeout(2000),
+      });
+      if (!response.ok) return false;
+      const data = z.object({ capabilities: z.array(z.string()) }).safeParse(await response.json());
+      return data.success && data.data.capabilities.includes("vision");
+    } catch { return false; }
+  }
   readonly name = "ollama";
   private available: boolean | null = null;
 
