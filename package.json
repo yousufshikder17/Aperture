@@ -22,5 +22,8 @@
   },
   "overrides": {
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@next/env": "15.5.20"
   }
 }

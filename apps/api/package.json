@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --require ../../scripts/load-root-env.cjs src/index.ts",
     "start": "tsx src/index.ts",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",

@@ -207,3 +207,7 @@ Resources can be filtered by beginner, intermediate, or advanced level while
 retaining the skill filter. Feed ingestion remains administrator-only over the
 shared catalog; response bodies are limited to 2 MiB. No feed cache, personalized
 scan, hosted analysis, or listing-discovery migration is introduced by this port.
+
+Development commands load the root `.env` cross-platform; shell exports and workspace
+.env copies are unnecessary. Existing process values win; restart after edits.
+Production starts/builds retain deployment environment values.

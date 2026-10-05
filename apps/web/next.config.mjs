@@ -1,3 +1,5 @@
+import "../../scripts/load-root-env.cjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["@aperture/shared"],

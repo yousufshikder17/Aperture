@@ -1,3 +1,4 @@
+import "../../scripts/load-root-env.cjs";
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
