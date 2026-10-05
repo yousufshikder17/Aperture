@@ -3,6 +3,7 @@ import type { ListingSource } from "@aperture/shared";
 import { NormalizedJobSchema } from "./normalized-job.js";
 import type { JobSourceAdapter, JobSourceConfig, JobSourceContext, JobSourceError, JobSourceFetchResult } from "./job-source.js";
 import { FeedReadError, parseFeed, validateFeedUrl } from "./feed-reader.js";
+import { careerText } from "./career-text.js";
 
 export interface FeedConfig { source: ListingSource; url: string }
 
@@ -12,6 +13,12 @@ export function normalizeRssItem(value: unknown, feed: FeedConfig, observedAt: D
   const item = value as Record<string, unknown>;
   if (typeof item.link !== "string" || typeof item.title !== "string") return null;
   const name = /^(.*?)\s+(?:-|at)\s+(.*)$/.exec(item.title);
+  const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : null;
+  const jobicy = feed.source === "jobicy";
+  const company = (jobicy ? text(item["job_listing:company"]) : null) ?? text(item.company);
+  const location = (jobicy ? text(item["job_listing:location"]) : null) ?? text(item.location);
+  const employmentType = (jobicy ? text(item["job_listing:job_type"]) : null) ?? text(item.employmentType);
+  const content = jobicy ? text(item["content:encoded"]) : null;
   const guid = typeof item.guid === "object" && item.guid !== null
     ? (item.guid as Record<string, unknown>)["#text"] : item.guid;
   const result = NormalizedJobSchema.safeParse({
@@ -19,13 +26,14 @@ export function normalizeRssItem(value: unknown, feed: FeedConfig, observedAt: D
     namespace: rssNamespace(feed.url),
     externalId: typeof guid === "string" && guid.trim() ? guid.trim() : null,
     url: item.link,
-    title: name?.[1]?.trim() ?? item.title,
-    company: name?.[2]?.trim() || "Unknown",
-    description: typeof item.description === "string" ? item.description : "",
+    sourceUrl: item.link, canonicalUrl: item.link,
+    title: company ? item.title : name?.[1]?.trim() ?? item.title,
+    company: company ?? (name?.[2]?.trim() || "Unknown"),
+    description: content ? careerText(content) : typeof item.description === "string" ? item.description : "",
     postedAt: typeof item.pubDate === "string" && Number.isFinite(Date.parse(item.pubDate)) ? new Date(item.pubDate) : null,
     sourceUpdatedAt: null, observedAt,
     // An RSS entry is discovery evidence, not a guarantee that a position remains open.
-    availability: "unknown", location: null, salary: null, raw: item,
+    availability: "unknown", location, employmentType, salary: null, raw: item,
   });
   return result.success ? result.data : null;
 }

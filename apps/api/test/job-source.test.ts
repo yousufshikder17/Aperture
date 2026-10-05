@@ -169,8 +169,8 @@ test("LinkedIn and Indeed labels are RSS providers with independently scoped ide
 test("public config remains operator-only without personalized or default Jobicy sources", () => {
   assert(configuredSources({}).every(source => !source.enabled));
   const configs = configuredSources({ LINKEDIN_RSS_URL: "https://example.test/linkedin",
-    INDEED_RSS_URL: "https://example.test/indeed", JOBICY_RSS_URL: "https://example.test/ignored" });
-  assert.equal(configs.length, 2);
+    INDEED_RSS_URL: "https://example.test/indeed", JOBICY_RSS_URL: "https://example.test/operator-jobicy" });
+  assert.equal(configs.length, 3);
   assert(configs.every(source => source.provider === "rss" && source.enabled));
-  assert.deepEqual(configs.map(source => source.source), ["linkedin_rss", "indeed_rss"]);
+  assert.deepEqual(configs.map(source => source.source), ["jobicy", "linkedin_rss", "indeed_rss"]);
 });

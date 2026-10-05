@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const ListingSourceSchema = z.enum([
+  "jobicy",
   "linkedin_rss",
   "indeed_rss",
   "career_page",
