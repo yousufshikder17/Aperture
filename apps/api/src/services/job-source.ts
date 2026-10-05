@@ -46,10 +46,11 @@ interface FetchMetadata {
 }
 export type JobSourceFetchResult = FetchMetadata & (
   // True only for an authoritative, fully consumed snapshot, never merely a successful request.
-  | { status: "success"; snapshotComplete: boolean; jobs: NormalizedJob[]; warnings: []; error?: never }
-  | { status: "partial"; snapshotComplete: false; jobs: NormalizedJob[];
+  | { status: "success"; snapshotComplete: true; snapshotNamespace: string; jobs: NormalizedJob[]; warnings: []; error?: never }
+  | { status: "success"; snapshotComplete: false; snapshotNamespace?: never; jobs: NormalizedJob[]; warnings: []; error?: never }
+  | { status: "partial"; snapshotComplete: false; snapshotNamespace?: never; jobs: NormalizedJob[];
       warnings: { code: string; count: number }[]; error?: never }
-  | { status: "failure"; snapshotComplete: false; jobs: []; warnings: []; error: JobSourceError }
+  | { status: "failure"; snapshotComplete: false; snapshotNamespace?: never; jobs: []; warnings: []; error: JobSourceError }
 );
 export interface JobSourceAdapter<TConfig> {
   readonly provider: JobSourceProvider;

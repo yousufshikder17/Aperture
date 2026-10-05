@@ -236,3 +236,27 @@ test("manual rows remain isolated and database constraints protect source identi
   await assert.rejects(sql`INSERT INTO listing_sources (listing_id,source,namespace,identity_key,url)
     VALUES (${randomUUID()},'linkedin_rss','other','id:x',${job().url})`);
 }));
+
+test("native snapshots scope closure, preserve alternate sources and tracked applications", enabled, async () => fixture(async (db, sql, owner) => {
+  const native = job({ source: "career_page", namespace: "greenhouse:board-a", availability: "open", applicationUrl: "https://example.test/apply" });
+  const [first] = await reconcileListings([native], db);
+  const store = applicationStore(db);
+  const application = await store.create(owner, { listingId:first!.listingId, status:"interviewing", notes:"Keep notes" });
+  assert(application);
+  assert.equal((await reconcileListings([native], db))[0]!.outcome, "unchanged");
+  const changed = { ...native, title:"Senior Engineer", location:"Toronto", description:"New role", applicationUrl:"https://example.test/new-apply", observedAt:new Date(at.getTime()+1000) };
+  assert.equal((await reconcileListings([changed], db))[0]!.listingId, first!.listingId);
+  const rows = await loadListingRows(randomUUID(), undefined, db);
+  assert.equal(rows[0]!.listing.url, changed.applicationUrl, "shared catalog exposes the supplied application URL");
+  await reconcileListings([job({ source:"career_page", namespace:"lever:board-b", externalId:"other", url:"https://example.test/other", availability:"open" })], db);
+  await reconcileListings([job({ source:"indeed_rss", namespace:"syndication", availability:"open" })], db);
+  await reconcileListings([], db);
+  assert.equal((await sql`SELECT availability FROM listings WHERE id = ${first!.listingId}`)[0]!.availability, "open");
+  await reconcileListings([], db, { source:"career_page", namespace:native.namespace, observedAt:new Date(at.getTime()+2000) });
+  assert.equal((await sql`SELECT availability FROM listings WHERE id = ${first!.listingId}`)[0]!.availability, "open", "another source keeps canonical open");
+  assert.equal((await sql`SELECT availability FROM listing_sources WHERE namespace='lever:board-b'`)[0]!.availability, "open");
+  await reconcileListings([], db, { source:"indeed_rss", namespace:"syndication", observedAt:new Date(at.getTime()+3000) });
+  assert.equal((await sql`SELECT availability FROM listings WHERE id = ${first!.listingId}`)[0]!.availability, "closed");
+  const [tracked] = await store.list(owner);
+  assert.equal(tracked!.id, application.id); assert.equal(tracked!.status, application.status); assert.equal(tracked!.notes, application.notes); assert.deepEqual(tracked!.events, application.events);
+}));

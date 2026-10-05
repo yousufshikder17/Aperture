@@ -12,6 +12,10 @@ export const NormalizedJobSchema = z.object({
   namespace: z.string().trim().min(1).max(200).refine(value => value !== "legacy"),
   externalId: z.string().trim().min(1).max(1000).nullable(),
   url: webUrl,
+  sourceUrl: webUrl.optional(),
+  canonicalUrl: webUrl.optional(),
+  applicationUrl: webUrl.optional(),
+  employmentType: z.string().max(1000).nullable().optional(),
   title: z.string().trim().min(1).max(1000),
   company: z.string().trim().min(1).max(1000),
   description: z.string().max(2 * 1024 * 1024),
@@ -25,6 +29,10 @@ export const NormalizedJobSchema = z.object({
 }).strict();
 
 export type NormalizedJob = z.infer<typeof NormalizedJobSchema>;
+export function providerNamespace(provider: string, scope: string) {
+  if (!/^[a-z][a-z0-9-]*$/.test(provider) || !scope.trim()) throw new Error("InvalidProviderNamespace");
+  return NormalizedJobSchema.shape.namespace.parse(`${provider}:${encodeURIComponent(scope)}`);
+}
 export function sourceIdentity(job: NormalizedJob) {
   return job.externalId === null ? `url:${job.url}` : `id:${job.externalId}`;
 }

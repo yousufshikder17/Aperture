@@ -14,9 +14,9 @@ export async function loadAccessibleListing(id: string, userId: string, database
 }
 
 export function toListing(row: typeof listings.$inferSelect): Listing {
-  const raw = row.raw as { originalUrl?: string } | null;
+  const raw = row.raw as { originalUrl?: string; career?: { applicationUrl?: string; canonicalUrl?: string } } | null;
   return { id: row.id, source: row.source as Listing["source"],
-    url: row.source === "manual" ? raw?.originalUrl ?? "" : row.url,
+    url: row.source === "manual" ? raw?.originalUrl ?? "" : row.source === "career_page" ? raw?.career?.applicationUrl ?? raw?.career?.canonicalUrl ?? row.url : row.url,
     title: row.title, company: row.company, description: row.description,
     location: row.location, salary: row.salary, postedAt: row.postedAt?.toISOString() ?? null };
 }

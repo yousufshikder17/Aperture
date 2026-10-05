@@ -253,3 +253,13 @@ export const backgroundJobs = pgTable("background_jobs", {
   lastError: text("last_error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => [index("background_jobs_available_idx").on(t.availableAt)]);
+
+export const sourceHealth = pgTable("source_health", {
+  sourceId: text("source_id").primaryKey(),
+  status: text("status").notNull().default("unvalidated"),
+  lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+  lastSuccessfulAt: timestamp("last_successful_at", { withTimezone: true }),
+  recordsReceived: integer("records_received").notNull().default(0),
+  durationMs: integer("duration_ms").notNull().default(0),
+  diagnostics: jsonb("diagnostics").$type<string[]>().notNull().default([]),
+});
