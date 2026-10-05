@@ -2,7 +2,7 @@ import type { ListingSource } from "@aperture/shared";
 import type { NormalizedJob } from "./normalized-job.js";
 
 // Provider identifies the transport/integration, not the existing product-facing source label.
-// New adapters supply their own provider name; no provider registry is needed yet.
+// Provider selection belongs to the centralized resolver.
 export type JobSourceProvider = string;
 export interface JobSourceConfig<TConfig> {
   provider: JobSourceProvider;

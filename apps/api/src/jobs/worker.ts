@@ -1,3 +1,4 @@
+import { ingestCareerSource } from "./career-ingest.js";
 import { eq } from "drizzle-orm";
 import { users } from "@aperture/db";
 import { scanFeeds } from "../services/aggregator.js";
@@ -10,6 +11,7 @@ import { scheduleJobs } from "./scheduler.js";
 
 export async function handleJob(job: Job, tx: JobTransaction) {
   switch (job.kind) {
+    case "career-ingest": await ingestCareerSource(job.payload.sourceId!, job.id); return;
     case "recalc": return recalcUser(job.payload.userId!, tx);
     case "ingest": {
       const result = await scanFeeds({ context: { runId: job.id } });

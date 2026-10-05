@@ -9,7 +9,8 @@
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "resources:sync": "tsx src/jobs/resource-sync.ts",
-    "etl": "tsx src/jobs/etl.ts"
+    "etl": "tsx src/jobs/etl.ts",
+    "sources:validate": "tsx src/jobs/source-pilot.ts"
   },
   "dependencies": {
     "@aperture/ai": "*",

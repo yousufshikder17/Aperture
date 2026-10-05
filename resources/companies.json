@@ -1,0 +1,45 @@
+{
+  "companies": [
+    {
+      "id": "example",
+      "slug": "example",
+      "name": "Example Company",
+      "careersUrl": "https://example.test/careers",
+      "enabled": false,
+      "tags": []
+    }
+  ],
+  "sources": [
+    {
+      "provider": "greenhouse",
+      "id": "example-greenhouse",
+      "companyId": "example",
+      "boardToken": "example-board",
+      "enabled": false,
+      "intervalHours": 24,
+      "support": "unvalidated",
+      "reason": "Synthetic disabled example; configure and approve your own source before enabling."
+    },
+    {
+      "provider": "lever",
+      "id": "example-lever",
+      "companyId": "example",
+      "site": "example-site",
+      "region": "global",
+      "enabled": false,
+      "intervalHours": 24,
+      "support": "unvalidated",
+      "reason": "Synthetic disabled example; configure and approve your own source before enabling."
+    },
+    {
+      "provider": "ashby",
+      "id": "example-ashby",
+      "companyId": "example",
+      "boardName": "ExampleBoard",
+      "enabled": false,
+      "intervalHours": 24,
+      "support": "unvalidated",
+      "reason": "Synthetic disabled example; configure and approve your own source before enabling."
+    }
+  ]
+}

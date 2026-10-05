@@ -1,3 +1,5 @@
+import { recordJobSourceScan } from "../src/services/source-health.js";
+import { CompanyRegistrySchema } from "@aperture/shared";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
@@ -113,7 +115,7 @@ async function fixture(run: (database: ReturnType<typeof drizzle<typeof schema>>
         listing_id uuid NOT NULL REFERENCES listings, status text NOT NULL DEFAULT 'saved', applied_at timestamp,
         events jsonb NOT NULL DEFAULT '[]', notes text, created_at timestamp NOT NULL DEFAULT now());`);
     const migration = await connection.reserve();
-    try { for (const name of ["003_listing_reconciliation"])
+    try { for (const name of ["003_listing_reconciliation", "004_source_health"])
       await migration.unsafe(await readFile(new URL(`../../../packages/db/migrations/${name}.sql`, import.meta.url), "utf8"));
     } finally { migration.release(); }
     const owner = randomUUID(); await connection`INSERT INTO users VALUES (${owner})`;
@@ -259,4 +261,21 @@ test("native snapshots scope closure, preserve alternate sources and tracked app
   assert.equal((await sql`SELECT availability FROM listings WHERE id = ${first!.listingId}`)[0]!.availability, "closed");
   const [tracked] = await store.list(owner);
   assert.equal(tracked!.id, application.id); assert.equal(tracked!.status, application.status); assert.equal(tracked!.notes, application.notes); assert.deepEqual(tracked!.events, application.events);
+}));
+
+test("native health migration and failure/partial results preserve open listings", enabled, async () => fixture(async (db, sql) => {
+  const registry=CompanyRegistrySchema.parse({companies:[{id:"example",slug:"example",name:"Example",careersUrl:"https://example.test/careers",enabled:true,tags:[]}],sources:[{provider:"greenhouse",id:"board",companyId:"example",boardToken:"board",enabled:true,intervalHours:24,support:"supported"}]});
+  const metadata={provider:"greenhouse",sourceId:"board",source:"career_page" as const,fetchedAt:at,durationMs:12,recordsReceived:1};
+  const native=job({source:"career_page",namespace:"greenhouse:board",availability:"open"});
+  await recordJobSourceScan("board",{...metadata,status:"success",snapshotComplete:true,snapshotNamespace:native.namespace,jobs:[native],warnings:[]},db,registry);
+  const later=new Date(at.getTime()+1000);
+  await recordJobSourceScan("board",{...metadata,fetchedAt:later,status:"failure",snapshotComplete:false,jobs:[],warnings:[],error:{kind:"source",code:"network_failure",retryable:true}},db,registry);
+  const [health]=await db.select().from(schema.sourceHealth);
+  assert.equal(health!.status,"failure"); assert.equal(health!.lastSuccessfulAt!.toISOString(),at.toISOString());
+  assert.deepEqual(health!.diagnostics,["failure_kind:source","failure_code:network_failure","failure_retryable:true"]);
+  assert.equal((await sql`SELECT availability FROM listings`)[0]!.availability,"open");
+  await recordJobSourceScan("board",{...metadata,fetchedAt:new Date(at.getTime()+2000),status:"partial",snapshotComplete:false,jobs:[],warnings:[{code:"invalid_record",count:1}]},db,registry);
+  assert.equal((await sql`SELECT availability FROM listings`)[0]!.availability,"open");
+  await recordJobSourceScan("board",{...metadata,fetchedAt:new Date(at.getTime()+3000),status:"success",snapshotComplete:true,snapshotNamespace:native.namespace,jobs:[],warnings:[]},db,registry);
+  assert.equal((await sql`SELECT availability FROM listings`)[0]!.availability,"closed");
 }));
