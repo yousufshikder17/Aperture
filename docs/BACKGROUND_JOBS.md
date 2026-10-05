@@ -3,7 +3,7 @@
 Listing ingestion also requires migration `003_listing_reconciliation.sql`. Shared
 RSS scans use the canonical reconciler; committed feed batches are safe to retry,
 and failed batches roll back listing/source changes. No personal discovery table is
-introduced. See [listing reconciliation](LISTING_RECONCILIATION.md).
+introduced. See [native lifecycle details](NATIVE_SOURCES.md).
 
 Apply `packages/db/migrations/002_background_jobs.sql` before deploying the API,
 or use `npm run db:push` for a new database. Profile content, version history and
@@ -55,6 +55,7 @@ The scheduler uses PostgreSQL time and checks once per minute:
 | Work | Schedule (UTC) |
 | --- | --- |
 | Ingest operator-configured feeds | Hourly; updates the shared catalog |
+| Ingest approved enabled native sources | Configured 6–168-hour intervals, staggered per source |
 | Refresh analytics | Hourly |
 | Sync resources | Daily, from 06:00 |
 | Prepare and deliver digests | Daily, from 08:00 |
@@ -79,3 +80,10 @@ deduplication window expires; do not recreate an expired message under a new key
 without checking delivery history. Empty digests are skipped.
 Digest job payloads contain recipient addresses and matched job text; restrict
 database access as for the rest of the user's career data.
+
+Native sources use the same scheduler and durable worker, through `career-ingest`.
+Apply migration 004 for minimal persisted health. Disabled companies/sources are skipped;
+retryable fetch failures record safe diagnostics before signalling the existing queue.
+Non-retryable fetch failures are recorded without retry; partial scans retain valid jobs
+without authorizing closure. No separate provider service, scheduler or retry loop exists.
+See [native sources](NATIVE_SOURCES.md).

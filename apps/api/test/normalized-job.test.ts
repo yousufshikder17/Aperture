@@ -33,27 +33,27 @@ test("availability requires all representations closed; missing and unknown evid
 
 test("Jobicy RSS preserves explicit company/location, full sanitized content, provenance and employment/category metadata", () => {
   const xml = readFileSync(new URL("./fixtures/jobicy-rss.xml", import.meta.url), "utf8");
-  const feed = { source: "jobicy" as const, url: "https://jobicy.com/jobs/feed" };
+  const feed = { source: "jobicy" as const, url: "https://example.test/jobicy-feed" };
   const items = parseFeed(xml), at = new Date("2026-10-05T12:00:00Z");
   const first = normalizeRssItem(items[0], feed, at)!;
-  assert.equal(first.title, "Solutions Architect for Automotive"); assert.equal(first.company, "Canonical");
+  assert.equal(first.title, "Solutions Architect for Automotive"); assert.equal(first.company, "Example Company");
   assert.equal(first.location, "Anywhere"); assert.equal(first.employmentType, "Full Time");
   assert.equal(first.description, "Build & test List<T>.\nDevelop Linux systems\nSupport customers");
   assert.equal(first.postedAt?.toISOString(), "2026-10-04T05:45:40.000Z");
-  assert.equal(first.url, "https://jobicy.com/jobs/154514-solutions-architect-for-automotive");
+  assert.equal(first.url, "https://example.test/jobs/solutions-architect");
   assert.equal(first.sourceUrl, first.url); assert.equal(first.canonicalUrl, first.url);
   assert.equal(first.externalId, first.url); assert.equal(sourceIdentity(first), `id:${first.url}`);
   assert.equal(first.raw?.["job_listing:category"], "Software Engineering");
-  assert.equal(first.raw?.["job_listing:company"], "Canonical");
+  assert.equal(first.raw?.["job_listing:company"], "Example Company");
   assert.equal(first.salary, null); assert.equal(first.sourceUpdatedAt, null); assert.equal(first.observedAt, at);
   assert.equal(first.availability, "unknown");
   const second = normalizeRssItem(items[1], feed, at)!;
-  assert.equal(second.company, "Canonical"); assert.equal(second.location, "USA, Canada, LATAM");
+  assert.equal(second.company, "Example Company"); assert.equal(second.location, "USA, Canada, LATAM");
   assert.equal(second.description, "Lead the direct sales team.");
 });
 
 test("explicit company takes precedence over title parsing and malformed or missing metadata is not invented", () => {
-  const feed = { source: "jobicy" as const, url: "https://jobicy.com/jobs/feed" }, at = new Date();
+  const feed = { source: "jobicy" as const, url: "https://example.test/jobicy-feed" }, at = new Date();
   const base = { title: "Engineer - Platform", link: "https://example.test/job", "job_listing:company": " Actual Co ",
     "job_listing:location": "Canada", "job_listing:job_type": "Contract" };
   const job = normalizeRssItem(base, feed, at)!;

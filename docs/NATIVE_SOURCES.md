@@ -22,3 +22,21 @@ Use npm run sources:validate -w @aperture/api -- <source-id> [registry-json-path
 Activation overrides are in-memory only; no listing, health or tracker writes occur.
 Technical support does not establish source-use or redistribution rights. Approve sources separately.
 Normal tests are synthetic; PostgreSQL tests require a disposable TEST_DATABASE_URL.
+
+## Verification and release limits
+
+Run npm test, npm run typecheck, npm run build, and
+npm run test:browser -w @aperture/web. The browser fixture uses an isolated Next
+cache and synthetic OIDC/API responses, covering shared scans, tracking, manual
+ownership, review-before-save, optional import AI, and absent Private controls.
+The API includes provider fixtures, transport bounds, namespace isolation,
+duplicate handling, Lever pagination, Ashby visibility, worker and health checks.
+PostgreSQL tests additionally cover scoped empty closure, alternate observations,
+application URL updates, intact applications and the new health migration.
+
+The selective port passes deterministic and browser checks. PostgreSQL acceptance
+was not executed because TEST_DATABASE_URL was unavailable; configure a disposable
+database and rerun before deployment. Existing production databases need migration
+004 in addition to 002/003. Review dependency audit findings and approve any real
+source inventory separately. No source is enabled and no live jobs are persisted
+by this port. Technical readiness is separate from deployment/source-use approval.

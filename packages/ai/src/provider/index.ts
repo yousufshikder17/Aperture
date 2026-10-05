@@ -114,4 +114,3 @@ export function isProviderConfigured(tier: ModelTier): boolean {
       (process.env.OLLAMA_MODEL_FAST?.trim() && process.env.OLLAMA_MODEL_QUALITY?.trim()));
   }
 }
-

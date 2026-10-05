@@ -23,7 +23,7 @@ The API is the authorization boundary. The browser never selects an identity wit
 
 - Node.js 20 or newer
 - PostgreSQL for application data
-- Optional AI-provider credentials for resume extraction and resource classification
+- Optional AI-provider configuration for assisted resume import and resource classification; ordinary text imports need no AI
 - DuckDB is embedded for local analytical queries
 
 ## Setup
@@ -52,9 +52,13 @@ draft, and save a posting visible only to your account. No feed or administrator
 is required for manual entry. See [manual postings](docs/MANUAL_POSTINGS.md).
 
 At `/listings`, refresh the latest 100 catalog entries or scan the operator-configured
-LinkedIn/Indeed RSS feeds. Scanning remains **administrator-only** because it updates
+RSS feeds (LinkedIn/Indeed labels, plus explicitly configured Jobicy). Scanning remains **administrator-only** because it updates
 the shared catalog. Missing configuration, partial feed failures and duplicate entries
-are distinguished; scanning does not automatically score matches.
+are distinguished; scanning does not automatically score matches. Native Greenhouse, Lever
+and Ashby sources use the existing durable worker, separately from the RSS scan button.
+The [native registry](resources/companies.json) contains disabled synthetic examples only;
+see [configuration and read-only validation](docs/NATIVE_SOURCES.md). Provider support
+does not establish permission to redistribute a company's jobs.
 
 Open a listing to read its description and calculate a transparent match against your
 saved master resume. Scoring is deterministic/local, respects the account allowance,
@@ -76,9 +80,10 @@ PostgreSQL acceptance. Browser captures are saved under ignored `exports/browser
 RSS imports now use a normalized source model and canonical reconciliation. Apply
 `packages/db/migrations/003_listing_reconciliation.sql` when upgrading an existing
 database. Source IDs and exact URLs preserve listing references while refreshing
-content; RSS absence never implies closure. See [reconciliation rules and migration
-details](docs/LISTING_RECONCILIATION.md).
+content; RSS absence never implies closure. See [native lifecycle and migration
+details](docs/NATIVE_SOURCES.md).
 
+Apply `packages/db/migrations/004_source_health.sql` for native scan diagnostics.
 Apply `packages/db/migrations/002_background_jobs.sql`, then set
 `BACKGROUND_JOBS_ENABLED=true` on the persistent API instance owning the DuckDB file.
 Profile saves and recalculation jobs commit atomically. The worker retries failures
@@ -136,9 +141,9 @@ save behavior remains; avoid concurrently editing the same resume in multiple ta
 
 Run `npm test` and `npm run typecheck` from the repository root. The opt-in
 `npm run test:browser -w @aperture/web` requires Chrome and `agent-browser` on the
-machine (`AGENT_BROWSER_BIN` can specify its native executable). Stop the web dev
-server first: the test starts its own Next.js instance on port 3109, overridable
-with `BUILDER_TEST_PORT`, and uses a temporary loopback API with synthetic data.
+machine (`AGENT_BROWSER_BIN` can specify its native executable). The test uses an isolated
+Next build cache and starts its own instance on port 3109 (override with `BUILDER_TEST_PORT`).
+Keep the chosen port free. It uses a temporary loopback API with synthetic data.
 It checks the real browser UI, not PostgreSQL persistence or a live AI provider.
 Screenshots go to the ignored `exports/browser-check` directory. Configure
 browser OIDC login as described in the authentication guide. Development-token
